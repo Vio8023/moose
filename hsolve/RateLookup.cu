@@ -50,7 +50,6 @@ LookupTable::LookupTable(
 	
 	//~ interpolate_.resize( nSpecies );
 	table_.resize( nPts_ * nColumns_ );
-	
 }
 
 void LookupTable::addColumns(
@@ -86,6 +85,7 @@ void LookupTable::column( unsigned int species, LookupColumn& column )
 
 void LookupTable::row( double x, LookupRow& row )
 {
+    //printf("min_:%f, max_:%f, x:%f, dx_:%f.\n", min_, max_, x, dx_);
 	if ( x < min_ )
 		x = min_;
 	else if ( x > max_ )
@@ -97,10 +97,23 @@ void LookupTable::row( double x, LookupRow& row )
 	row.fraction = div - integer;
 	row.row = &( table_.front() ) + integer * nColumns_;
 	row.rowIndex = integer * nColumns_;
+	//printf("div:%f, integer:%u, fraction:%f, rowIndex:%d.\n", div, integer, row.fraction, row.rowIndex);
 }
 
 #ifdef USE_CUDA
-
+unsigned int LookupTable::get_num_of_points()
+{
+    return LookupTable::nPts_;
+}
+     
+unsigned int LookupTable::get_num_of_columns()
+{
+    return LookupTable::nColumns_;
+}
+vector<double> LookupTable::get_table()
+{
+    return LookupTable::table_;
+}
 __global__
 void
 row_kernel(double * d_x, 
@@ -132,6 +145,7 @@ row_kernel(double * d_x,
 	d_row[tid].fraction = div - integer;
 	d_row[tid].row = reinterpret_cast<double*>(address + sizeof(double) * integer * nColumns);	
 	d_row[tid].rowIndex = integer * nColumns;
+	//printf("tid:%d, div: %f, integer: %u, fraction: %f, rowIndex %d.\n", tid, div, integer, d_row[tid].fraction, d_row[tid].rowIndex);
 }
 
 void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterator& row, unsigned int size){
@@ -160,7 +174,6 @@ void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterat
     
     row_kernel<<<gridSize, blockSize>>>(d_x_p, d_row_p, min_, max_, dx_, nColumns_, size, address);	
     
-    cudaThreadSynchronize();
     cudaDeviceSynchronize(); 
 #ifdef DEBUG_VERBOSE    
     printf("kernel launch finished...\n");

@@ -24,7 +24,7 @@
 #endif
 
 #ifndef DEBUG
-//define DEBUG
+#define DEBUG
 #endif
 
 #ifndef DEBUG_VERBOSE
@@ -48,7 +48,7 @@ const int HSolveActive::INSTANT_Z = 4;
 HSolveActive::HSolveActive()
 {
     caAdvance_ = 1;
-
+		current_ca_position = 0;
     // Default lookup table size
     //~ vDiv_ = 3000;    // for voltage
     //~ caDiv_ = 3000;   // for calcium
@@ -246,37 +246,137 @@ void HSolveActive::advanceChannels( double dt )
     vector< LookupRow* >::iterator icarow = caRow_.begin();
 
     LookupRow vRow;
+#ifdef USE_CUDA
+   // printf("Start preparing CUDA advanceChannel...\n");
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+    vector<LookupRow> vRow_ac;
+    vector<LookupRow> caRow_ac;
+    vector<LookupColumn> column_ac;
+    
+    vector<LookupRow> vRow_collected_ac(V_.size());
+    vector<LookupRow>::iterator vRowiter;
+    iv = V_.begin();
+    vRowiter = vRow_collected_ac.begin();
+    
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
+    printf("Starting row_gpu with %d rows...\n", V_.size());
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif
+    
+    //vTable_.row_gpu(iv, vRowiter, V_.size());
+    for(int i = 0 ; i < V_.size(); ++i)
+    {
+        vTable_.row(*iv, *vRowiter);
+        iv++;
+        vRowiter++;
+    }
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
+    printf("Starting converting caRow_ to caRow_ac...\n");
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif 
+   
+    int i;
+    
+    caRow_ac.resize(caRow_.size());
+    for(i = 0; i < caRow_.size(); ++i)
+    {
+        if(caRow_[i])
+        {
+            caRow_ac[i] = *(caRow_[i]);
+        } 
+        else
+        {
+            LookupRow * newRow = (LookupRow *) malloc(sizeof(LookupRow));
+            newRow->rowIndex = -1;
+            caRow_ac[i] = *newRow;
+        } 
+       
+    }
+
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE)   
+    printf("Starting find-row for caRowCompt_ and vRow_ac construction...\n");
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif
+    std::vector<int>::iterator istate_count_map = state_count_map_.begin();
+    for (i = 0; i < V_.size(); ++i) {
+        vRow = vRow_collected_ac[i];
+        icarowcompt = caRowCompt_.begin();
+        caBoundary = ica + *icacount;
+        
+        for ( ; ica < caBoundary; ++ica )
+        {
+            caTable_.row( *ica, * icarowcompt );
+            ++icarowcompt;
+        }
+        
+        chanBoundary = ichan + *ichannelcount;
+        for ( ; ichan < chanBoundary; ++ichan )
+        {
+            for(int j = 0; j < *istate_count_map; ++j)
+            {
+                vRow_ac.push_back(vRow);
+            }
+            ++istate_count_map;
+        }
+        
+        ++ichannelcount, ++icacount;
+    }
+    
+    //for(i = 0; i < vRow_ac.size(); ++i)
+    //{
+    //    printf("vRow_ac[%d] rowIndex: %d.\n", i, vRow_ac[i].rowIndex);
+    //}
+    
+    vRow_collected_ac.clear();  
+
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
+    printf("Finish preparing CUDA advanceChannel! \n");
+    printf("Starting kernel...\n");
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif    
+    //printf("set_size: %d, state_ size: %d.\n", column_.size(), state_.size());
+    advanceChannel_gpu(vRow_ac, 
+                       caRow_ac, 
+                       column_, 
+                       vTable_, 
+                       caTable_, 
+                       &state_.front(), 
+                       &state_instant_map_.front(), 
+                       &state_power_map_.front(), 
+                       dt);
+    vRow_ac.clear();
+    caRow_ac.clear();
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
+    printf("Finish launching CUDA advanceChannel! \n");
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif 
+#else    
     double C1, C2;
-    unsigned int ca_begin_pos = 0;
-    unsigned int caRowCompt_begin_pos = 0;
+
     for ( iv = V_.begin(); iv != V_.end(); ++iv )
     {
         vTable_.row( *iv, vRow );
         icarowcompt = caRowCompt_.begin();
         caBoundary = ica + *icacount;
         
-#ifdef USE_CUDA      
-#ifdef DEBUG_VERBOSE  
-		printf("Starting to find rows using row_gpu: icacount:%u\n", *icacount);
-#endif
-		caTable_.row_gpu(ica, icarowcompt, *icacount);
-#ifdef DEBUG_VERBOSE		
-		printf("Finish find rows using row_gpu.\n"); 
-#endif
-#ifdef DEBUG_INTERACTIVE
-		printf("Press [Enter] to continue...\n");
-		getchar();
-#endif
-		icarowcompt += *icacount;
-		ica += *icacount;
-#else
         for ( ; ica < caBoundary; ++ica )
         {
             caTable_.row( *ica, * icarowcompt );
             //printf("row: %d, fraction: %f.\n", icarowcompt->rowIndex, icarowcompt->fraction);
             ++icarowcompt;
-        }
-#endif     
+        }   
         /*
          * Optimize by moving "if ( instant )" outside the loop, because it is
          * rarely used. May also be able to avoid "if ( power )".
@@ -348,6 +448,7 @@ void HSolveActive::advanceChannels( double dt )
 
         ++ichannelcount, ++icacount;
     }
+#endif    
 }
 
 /**

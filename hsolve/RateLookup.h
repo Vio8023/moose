@@ -13,6 +13,8 @@
 #define USE_CUDA
 #endif
 
+using namespace std;
+
 struct LookupRow
 {
 	double* row;		///< Pointer to the first column on a row
@@ -42,8 +44,8 @@ public:
 	/// Adds the columns for a given species. Columns supplied are C1 and C2
 	void addColumns(
 		int species,
-		const vector< double >& C1,
-		const vector< double >& C2 );
+		const std::vector< double >& C1,
+		const std::vector< double >& C2 );
 		//~ const vector< double >& C2,
 		//~ bool interpolate );
 	
@@ -63,6 +65,9 @@ public:
 	void row_gpu(vector<double>::iterator& x, 
 						vector<LookupRow>::iterator& row, 
 						unsigned int size);
+    unsigned int get_num_of_points();
+    unsigned int get_num_of_columns();
+    vector<double> get_table();						
 #endif
 
 	/// Actually performs the lookup and the linear interpolation
