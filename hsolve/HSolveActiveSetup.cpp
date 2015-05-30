@@ -6,7 +6,7 @@
 ** GNU Lesser General Public License version 2.1
 ** See the file COPYING.LIB for the full notice.
 **********************************************************************/
-
+#define USE_CUDA
 
 #include "HSolveActive.h"
 
@@ -194,20 +194,45 @@ void HSolveActive::readHHChannels()
              * interface to find gate values.
              */
             chan2state_.push_back( state_.size() );
-
+#ifdef USE_CUDA             
+            int state_count = 0;
+#endif            
             if ( Xpower > 0.0 )
+            {
                 state_.push_back( X );
+#ifdef USE_CUDA                
+                state_power_map_.push_back(- INSTANT_X);
+                state_instant_map_.push_back(instant);
+                state_count ++;
+#endif            
+						}     
             if ( Ypower > 0.0 )
+            {
                 state_.push_back( Y );
+#ifdef USE_CUDA                   
+                state_power_map_.push_back(- INSTANT_Y);
+                state_instant_map_.push_back(instant);
+                state_count ++;
+#endif                
+					  }
             if ( Zpower > 0.0 )
+            {
                 state_.push_back( Z );
-
+#ifdef USE_CUDA                   
+                state_power_map_.push_back(current_ca_position);
+                state_instant_map_.push_back(instant);
+                current_ca_position++;
+#endif                   
+						}
             /*
              * Map channel index to compartment index. This is useful in the
              * interface to generate channel Ik values (since we then need the
              * compartment Vm).
              */
             chan2compt_.push_back( icompt - compartmentId_.begin() );
+#ifdef USE_CUDA             
+            state_count_map_.push_back(state_count);
+#endif            
         }
     }
 

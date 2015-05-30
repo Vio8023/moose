@@ -24,6 +24,8 @@
 #include "HSolveStruct.h"
 #include "HinesMatrix.h"
 #include "HSolvePassive.h"
+
+#include "CudaGlobal.h"
 #include "RateLookup.h"
 
 class HSolveActive: public HSolvePassive
@@ -131,7 +133,16 @@ protected:
 		*   Tells you which compartments have external calcium-dependent
 		*   channels so that you can send out Calcium concentrations in only
 		*   those compartments. */
-
+#ifdef USE_CUDA    
+    vector< int >             state_power_map_;  ///state map to - Instant for x,y , map to index of caRow for z
+    
+    vector< int >             state_instant_map_; ///
+    vector< int >             state_count_map_;
+    int                       current_ca_position;
+#endif
+    static const int INSTANT_X;
+    static const int INSTANT_Y;
+    static const int INSTANT_Z;
 private:
     /**
      * Setting up of data structures: Defined in HSolveActiveSetup.cpp
@@ -167,9 +178,20 @@ private:
     void sendSpikes( ProcPtr info );
     void sendValues( ProcPtr info );
 
-    static const int INSTANT_X;
-    static const int INSTANT_Y;
-    static const int INSTANT_Z;
+#ifdef USE_CUDA
+		void advanceChannel_gpu(
+                                            vector<LookupRow>&               vRow,
+                                            vector<LookupRow>&               caRow,
+                                            vector<LookupColumn>&            column,                                           
+                                            LookupTable&                     vTable,
+                                            LookupTable&                     caTable,                       
+                                            double                          * istate,
+                                            int                             * instant_map,
+                                            int                             * state_power_map,
+                                            double                          dt
+);
+#endif
+
 };
 
 #endif // _HSOLVE_ACTIVE_H
