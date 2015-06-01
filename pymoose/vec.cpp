@@ -69,6 +69,7 @@
 #include "../utility/utility.h"
 #include "../randnum/randnum.h"
 #include "../shell/Shell.h"
+#include "../shell/Wildcard.h"
 
 #include "moosemodule.h"
 
@@ -454,50 +455,6 @@ extern "C" {
             cout << "Deleting ObjId " << oid << endl;
         }
 #endif
-        string className = Field<string >::get(oid, "className");
-        vector <string> destFields = getFieldNames(className, "destFinfo");
-        vector <string> lookupFields = getFieldNames(className, "lookupFinfo");
-        vector <string> elementFields = getFieldNames(className, "elementFinfo");
-        unsigned int numData = Field<unsigned int>::get(oid, "numData");
-		unsigned int begin = 0;
-		unsigned int end = numData;
-		if ( oid.element()->cinfo()->isA( "Msg" ) ) {
-			begin = oid.dataIndex;
-			end = oid.dataIndex + 1;
-		}
-        // clean up the maps containing initialized lookup/dest/element fields
-        for (unsigned int ii = begin; ii < end; ++ii){
-            ObjId el(oid.id, ii);
-#ifndef NDEBUG
-            if (verbosity > 1){
-                cout << "    Deleting ObjId " << el << endl;
-            }
-#endif
-            for (unsigned int fidx = 0; fidx < lookupFields.size(); ++fidx){
-                map<string, PyObject *>::iterator it =
-                        get_inited_lookupfields().find(el.path() + "." + lookupFields[fidx]);
-                if( it != get_inited_lookupfields().end()){
-                    Py_XDECREF(it->second);
-                    get_inited_lookupfields().erase(it);                    
-                }
-            }
-            for (unsigned int fidx = 0; fidx < destFields.size(); ++fidx){
-                map<string, PyObject *>::iterator it =
-                        get_inited_destfields().find(el.path() + "." + destFields[fidx]);
-                if( it != get_inited_destfields().end()){
-                    Py_XDECREF(it->second);
-                    get_inited_destfields().erase(it);
-                }
-            }
-            for (unsigned int fidx = 0; fidx < elementFields.size(); ++fidx){
-                map<string, PyObject *>::iterator it =
-                        get_inited_elementfields().find(el.path() + "." + elementFields[fidx]);
-                if( it != get_inited_elementfields().end()){
-                    Py_XDECREF(it->second);
-                    get_inited_elementfields().erase(it);
-                }
-            }    
-        }
         SHELLPTR->doDelete(oid);
         Py_RETURN_NONE;
     }

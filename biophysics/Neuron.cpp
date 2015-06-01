@@ -8,6 +8,8 @@
 **********************************************************************/
 
 #include "header.h"
+#include "ElementValueFinfo.h"
+#include "LookupElementValueFinfo.h"
 #include "../shell/Shell.h"
 #include "../shell/Wildcard.h"
 #include "ReadCell.h"
@@ -15,6 +17,7 @@
 #include "../randnum/Normal.h"
 #include "../randnum/randnum.h"
 #include "SwcSegment.h"
+#include "Spine.h"
 #include "Neuron.h"
 
 #include "../external/muparser/muParser.h"
@@ -146,41 +149,31 @@ const Cinfo* Neuron::initCinfo()
 		&Neuron::getCompartmentLengthInLambdas
 	);
 
-	static ValueFinfo< Neuron, vector< string > > mechSpec( 
-		"mechSpec",
-		"Specification for distribution of mechanisms on dendrite. \n"
-		"These may include channels, CaConcen, spines, or "
-		"signaling systems. In addition parameters of the compartment "
-		"itself can also be specified. "
-		"Each entry in the specification begins with the name of the "
-		"prototype, followed by successive triplets of strings: \n"
-		"	(field, path, expression) \n"
+	static ElementValueFinfo< Neuron, vector< string > > 
+			channelDistribution( 
+		"channelDistribution",
+		"Specification for distribution of channels, CaConcens and "
+		"any other model components that are defined as prototypes and "
+		"have to be placed on the electrical compartments.\n"
+		"Arguments: proto path field expr [field expr]...\n"
 		" Each entry is terminated with an empty string. "
 		"The prototype is any object created in */library*, "
-		"but the electrical compartments themselves are identified with "
-		"a period: *.*\n"
-		"The triplets are as follows: \n"
+		"The paired arguments are as follows: \n"
 		"The *field* argument specifies the name of the parameter "
 		"that is to be assigned by the expression.\n"
-		"The *path* argument specifies a MOOSE wildcard path of the "
-		"electrical compartments on which the channel/spine/chem may "
-		"be placed. For example, '#' means put the channels everywhere. "
-		"'#apical#' means put the channels in all compartments which "
-	    "have the word 'apical' somewhere in their name."
-		"'soma' means put the channels only in the compartment named "
-		"'soma'.\n"
 		"The *expression* argument is a mathematical expression in "
 		"the muparser framework, which permits most operations including "
 		"trig and transcendental ones. Of course it also handles simple "
 		"numerical values like 1.0, 1e-10 and so on. "
 		"Available arguments for muParser are:\n"
-		" r, L, len, dia \n"
-		"	r: geometrical distance from soma, measured along dendrite, in metres.\n"
+		" p, g, L, len, dia \n"
+		"	p: path distance from soma, measured along dendrite, in metres.\n"
+		"	g: geometrical distance from soma, in metres.\n"
 		"	L: electrotonic distance (# of lambdas) from soma, along dend. No units.\n"
 		"	len: length of compartment, in metres.\n"
 		"	dia: for diameter of compartment, in metres.\n"
-		"Each of the mechanisms has a most-commonly-used field that "
-		"must be > 0 for the mechanism to be installed. For example, for "
+		"The expression for the first field must evaluate to > 0 "
+		"for the channel to be installed. For example, for "
 		"channels, if Field == Gbar, and func( r, L, len, dia) < 0, \n"
 		"then the channel is not installed. This feature is typically "
 		"used with the sign() or Heaviside H() function to limit range: "
@@ -188,105 +181,121 @@ const Cinfo* Neuron::initCinfo()
 		"one length constant from the soma, and zero elsewhere. \n"
 		"Available fields are: \n"
 		"Channels: Gbar (install), Ek \n"
-		"Electrical Compartments: RM, RA, CM, Em, initVm \n"
 		"CaConcen: shellDia (install), shellFrac (install), tau, min\n"
-		"Spines: spacing (install), spacingDistrib, sizeDistrib "
-		"startAngle, angleDistrib, rotation, rotationDistrib \n"
-		"Chem systems: scaleConcInit (install), concInit, nInit \n"
-		"Note that for chem systems the first use of *path* "
-		"specifies the electrical compartment(s) on which the system "
-		"is to be installed, and the scaleConcInit term scales /all/ "
-		"initial concs by the specified value. In subsequent parameter "
-		"triplets, the *path* specifies the name of the molecule to be "
-		"assigned, or the relative MOOSE path to this molecule, starting "
-		"from the chemical compartment in which the chemical system is "
-		"placed. \n"
 		"Unless otherwise noted, all fields are scaled appropriately by "
 		"the dimensions of their compartment. Thus the channel "
 		"maximal conductance Gbar is automatically scaled by the area "
 		"of the compartment, and the user does not need to insert this "
 		"scaling into the calculations.\n"
-		"All parameters are expressed in SI units. Concentration, for "
-		"example, is moles per cubic metre, which is equal to millimolar. "
+		"All parameters are expressed in SI units. Conductance, for "
+		"example, is Siemens/sq metre. "
 		"\n\n"
 		"Some example function forms might be for a channel Gbar: \n"
-		" r < 10e-6 ? 400 : 0.0 \n"
+		" p < 10e-6 ? 400 : 0.0 \n"
 		"		equivalently, \n"
-		" H(10e-6 - r) * 400 \n"
+		" H(10e-6 - p) * 400 \n"
 		"		equivalently, \n"
-		" ( sign(10e-6 - r) + 1) * 200 \n"
+		" ( sign(10e-6 - p) + 1) * 200 \n"
 		"Each of these forms instruct the function to "
-		"set channel Gbar to 400 S/m^2 only within 10 microns of soma\n"
+		"set channel Gbar to 400 S/m^2 only within 10 microns path "
+		"distance of soma\n"
 		"\n"
 		" L < 1.0 ? 100 * exp( -L ) : 0.0 \n"
 		" ->Set channel Gbar to an exponentially falling function of "
 		"electrotonic distance from soma, provided L is under "
 		"1.0 lambdas. \n",
-		&Neuron::setMechSpec,
-		&Neuron::getMechSpec
-	);
-
-	static ValueFinfo< Neuron, vector< string > > channelDistribution( 
-		"channelDistribution",
-		"Specification for channel distribution on this neuron. "
-		"Each entry in the specification is a triplet of strings: \n"
-		"	(name, path, function) \n"
-		" which are collated into a 3N vector of strings to specify N "
-		" channel distributions. The string arguments for each spec are: \n"
-		"chanName, pathOnCell, function( r, L, len, dia ) \n"
-		"The function uses arguments:\n"
-		"	r: geometrical distance from soma, measured along dendrite, in metres.\n"
-		"	L: electrotonic distance (# of lambdas) from soma, along dend. No unts.\n"
-		"	len: length of compartment, in metres.\n"
-		"	dia: for diameter of compartment, in metres.\n"
-		"For Channels, the function does Gbar = func( r, L, len, dia).\n"
-		"Note that the Gbar is automatically scaled by the area of the "
-		"compartment, you do not have to compute this.\n"
-		"For CaConc, the function does B = func( r, L, len, dia).\n"
-		"In both cases, if func() < 0 then the chan/CaConc is NOT created. "
-		"\n\n"
-		"For RM, RA, CM, Em, initVm, the function does \n"
-		"	func( r, L, len, dia ) \n" 
-		"with automatic scaling of the RM, RA, or CM by the geometry "
-		"of the compartment. As before, "
-		"if func() < 0.0 then the default value is used. "
-		"\n\n"
-		"Some example function forms might be for a channel Gbar: \n"
-		" r < 10e-6 ? 400 : 0.0 \n"
-		"equivalently, "
-		" ( sign(10e-6 - r) + 1) * 200 \n"
-		"Both of these forms instruct the function to "
-		"set channel Gbar to 400 S/m^2 only within 10 microns of soma\n"
-		"\n"
-		" L < 1.0 ? 100 * exp( -L ) : 0.0 \n"
-		" ->Set channel Gbar to an exponentially falling function of "
-		"electrotonic distance from soma, provided L is under 1.0 lambdas. "
-		"\n"
-		"The channelDistribution is parsed when the cell sourceFile is "
-		"loaded. The parsing of this table is equivalent to repeated calls "
-		"to *Neuron::assignChanDistrib()*, working through the entries in "
-		"the *channelDistribution* vector. ",
 		&Neuron::setChannelDistribution,
 		&Neuron::getChannelDistribution
 	);
-	static ValueFinfo< Neuron, vector< string > > spineSpecification( 
-		"spineSpecification",
-		"Specification for spine creation on this neuron. "
-		"Each entry in the specification is a string with the following "
-		"arguments: \n"
-		"protoName pathOnCell [spacing] [spacingDistrib] [sizeDistrib] "
-		"[angle] [angleDistrib] [rotation] [rotationDistrib]\n"
-		"Here the items in brackets are optional arguments. The default "
-		"spacing is 1e-6 metres and the rest of the defaults are zero. "
-		"Length units are metres and angle units are radians.",
-		&Neuron::setSpineSpecification,
-		&Neuron::getSpineSpecification
+
+	static ElementValueFinfo< Neuron, vector< string > > 
+			passiveDistribution( 
+		"passiveDistribution",
+		"Specification for distribution of passive properties of cell.\n"
+		"Arguments: . path field expr [field expr]...\n"
+		"Note that the arguments list starts with a period. "
+		" Each entry is terminated with an empty string. "
+		"The paired arguments are as follows: \n"
+		"The *field* argument specifies the name of the parameter "
+		"that is to be assigned by the expression.\n"
+		"The *expression* argument is a mathematical expression in "
+		"the muparser framework, which permits most operations including "
+		"trig and transcendental ones. Of course it also handles simple "
+		"numerical values like 1.0, 1e-10 and so on. "
+		"Available arguments for muParser are:\n"
+		" p, g, L, len, dia \n"
+		"	p: path distance from soma, measured along dendrite, in metres.\n"
+		"	g: geometrical distance from soma, in metres.\n"
+		"	L: electrotonic distance (# of lambdas) from soma, along dend. No units.\n"
+		"	len: length of compartment, in metres.\n"
+		"	dia: for diameter of compartment, in metres.\n"
+		"Available fields are: \n"
+		"RM, RA, CM, Rm, Ra, Cm, Em, initVm \n"
+		"The first three fields are scaled appropriately by "
+		"the dimensions of their compartment. Thus the membrane "
+		"resistivity RM (ohms.m^2) is automatically scaled by the area "
+		"of the compartment, and the user does not need to insert this "
+		"scaling into the calculations to compute Rm."
+		"Using the Rm field lets the user directly assign the "
+	    "membrane resistance (in ohms), presumably using len and dia.\n"
+	    "Similarly, RA (ohms.m) and CM (Farads/m^2) are specific units "
+		"and the actual values for each compartment are assigned by "
+		"scaling by length and diameter. Ra (ohms) and Cm (Farads) "
+		"require explicit evaluation of the expression. "
+		"All parameters are expressed in SI units. Conductance, for "
+		"example, is Siemens/sq metre.\n"
+		"Note that time these calculations do NOT currently include spines\n",
+		&Neuron::setPassiveDistribution,
+		&Neuron::getPassiveDistribution
 	);
+
+	static ElementValueFinfo< Neuron, vector< string > >spineDistribution(
+		"spineDistribution",
+		"Specification for distribution of spines on dendrite. \n"
+		"Arguments: proto path spacing expr [field expr]...\n"
+		" Each entry is terminated with an empty string. "
+		"The *prototype* is any spine object created in */library*, \n"
+		"The *path* is the wildcard path of compartments on which to "
+		"place the spine.\n"
+		"The *spacing* is the spacing of spines, in metres. \n"
+		"The *expression* argument is a mathematical expression in "
+		"the muparser framework, which permits most operations including "
+		"trig and transcendental ones. Of course it also handles simple "
+		"numerical values like 1.0, 1e-10 and so on. "
+		"The paired arguments are as follows: \n"
+		"The *field* argument specifies the name of the parameter "
+		"that is to be assigned by the expression.\n"
+		"The *expression* argument is a mathematical expression as above. "
+		"Available arguments for muParser are:\n"
+		" p, g, L, len, dia \n"
+		"	p: path distance from soma, measured along dendrite, in metres.\n"
+		"	g: geometrical distance from soma, in metres.\n"
+		"	L: electrotonic distance (# of lambdas) from soma, along dend. No units.\n"
+		"	len: length of compartment, in metres.\n"
+		"	dia: for diameter of compartment, in metres.\n"
+		"The expression for the *spacing* field must evaluate to > 0 for "
+		"the spine to be installed. For example, if the expresssion is\n"
+		"		H(1 - L) \n"
+		"then the systemwill only put spines closer than "
+		"one length constant from the soma, and zero elsewhere. \n"
+		"Available spine parameters are: \n"
+		"spacing, spacingDistrib, size, sizeDistrib "
+		"angle, angleDistrib \n",
+		&Neuron::setSpineDistribution,
+		&Neuron::getSpineDistribution
+	);
+
 	
 	static ReadOnlyValueFinfo< Neuron, unsigned int > numCompartments( 
 		"numCompartments",
 		"Number of electrical compartments in model. ",
 		&Neuron::getNumCompartments
+	);
+	
+	static ReadOnlyValueFinfo< Neuron, unsigned int > numSpines( 
+		"numSpines",
+		"Number of dendritic spines in model. ",
+		&Neuron::getNumSpines
 	);
 
 	static ReadOnlyValueFinfo< Neuron, unsigned int > numBranches( 
@@ -322,6 +331,34 @@ const Cinfo* Neuron::initCinfo()
 		&Neuron::getCompartments
 	);
 
+	static ReadOnlyLookupElementValueFinfo< Neuron, string, vector< ObjId > > 
+			compartmentsFromExpression( 
+		"compartmentsFromExpression",
+		"Vector of ObjIds of electrical compartments that match the "
+		"'path expression' pair in the argument string.",
+		&Neuron::getExprElist
+	);
+
+	static ReadOnlyLookupElementValueFinfo< Neuron, string, vector< double > > 
+			valuesFromExpression( 
+		"valuesFromExpression",
+		"Vector of values computed for each electrical compartment that "
+	   	"matches the 'path expression' pair in the argument string."
+		"This has 7 times the number of entries as # of compartments."
+		"For each compartment the entries are: \n"
+		"val, p, g, L, len, dia, 0",
+		&Neuron::getExprVal
+	);
+
+	static ReadOnlyLookupElementValueFinfo< Neuron, string, vector< ObjId > > 
+			spinesFromExpression( 
+		"spinesFromExpression",
+		"Vector of ObjIds of spines/heads sitting on the electrical "
+		"compartments that match the 'path expression' pair in the "
+		"argument string.",
+		&Neuron::getSpinesFromExpression
+	);
+
 	/////////////////////////////////////////////////////////////////////
 	// DestFinfos
 	/////////////////////////////////////////////////////////////////////
@@ -334,107 +371,12 @@ const Cinfo* Neuron::initCinfo()
 	   "on a reduced model will lose the original full cell geometry. ",
 		new EpFunc0< Neuron >( &Neuron::buildSegmentTree )
 	);
-	static DestFinfo insertSpines( "insertSpines",
-		"This function inserts spines on a neuron, placing them "
-		"perpendicular to the dendrite axis and spaced away from the axis "
-		"by the diameter of the dendrite. The placement of spines is "
-		"controlled by a range of parameters. "
-		"Arguments:\n "
-		"spineid: is the parent object of the prototype spine. The "
-		" spine prototype can include any number of compartments, and each"
-		" can have any number of voltage and ligand-gated channels, as "
-		" well as CaConc and other mechanisms.\n"
-		"path: is a wildcard path string for parent compartments for "
-		" the new spines. "
-		"placement: is a vector of doubles with the parameters for "
-		" placing the spines. Zero to six arguments may be provided. "
-		" Default spacing is 1 micron, remaining defaults are 0.0. "
-		" The parameters within placement are: \n"
-		"    placement[0] = spacing: distance (metres) between spines. \n"
-		"    placement[1] = spacingDistrib (metres): the width of a \n"
-	    "    normal distribution around the spacing. \n"
-		"    placement[2] = sizeDistrib: Random scaling of spine size.\n"
-		"    placement[3] = angle: Angular rotation around the axis of "
-		"    the dendrite. 0 radians is facing away from the soma. \n"
-		"    placement[4] = angleDistrib: Scatter around angle. "
-		"    The simplest way to put the spine in any random position is "
-		" to have an angleDistrib of 2 pi. The algorithm selects any "
-		" angle in the linear range of the angle distrib to add to the "
-		" specified angle.\n"
-		"    placement[5] = rotation (radians): With each position along "
-		"    the dendrite the algorithm computes a new spine direction, "
-		"    using rotation to increment the angle. "
-		"    placement[6] = rotationDistrib. Scatter in rotation. ",
-		new EpFunc3< Neuron, Id, string, vector< double > >(
-			&Neuron::insertSpines )
-	);
-	static DestFinfo clearSpines( "clearSpines",
-		"Clears out all spines. ",
-		new EpFunc0< Neuron >(
-			&Neuron::clearSpines )
-	);
-	static DestFinfo parseSpines( "parseSpines",
-		"Parses a previously assigned vector of spine specifications. "
-		"This is located in the field *spineSpecification*. "
-		"When this function is called it builds the specified spines on "
-		"the cell model.",
-		new EpFunc0< Neuron >(
-			&Neuron::parseSpines )
-	);
-
-
-	static DestFinfo assignChanDistrib( "assignChanDistrib",
-		"Handles requests to assign the channel distribution. Args are "
-		"chanName, pathOnCell, function( r, L, len, dia ) "
-		"The function uses arguments:\n"
-		"	r: geometrical distance from soma, measured along dendrite, in metres.\n"
-		"	L: electrotonic distance (# of lambdas) from soma, along dend. No unts.\n"
-		"	len: length of compartment, in metres.\n"
-		"	dia: for diameter of compartment, in metres.\n"
-		"For Channels, the function does Gbar = func( r, L, len, dia).\n"
-		"For CaConc, the function does B = func( r, L, len, dia).\n"
-		"In both cases, if func() < 0 then the chan/CaConc is NOT created. "
-		"\n\n"
-		"For Rm, Ra, Cm, the function does func( r, L, len, dia ), " 
-		"and if func() < 0.0 then the value takes the default value based "
-		"on scaling of RM, RA, or CM by the geometry of the compartment "
-		"\n\n"
-		"Some example function forms might be: \n"
-		" r < 10e-6 ? 400 * len * dia * pi : 0.0 \n"
-		" ->Set channel Gbar to 400 S/m^2 only within 10 microns of soma\n"
-		"\n"
-		" L < 1.0 ? 100 * exp( -e ) * len * dia * pi : 0.0 \n"
-		" ->Set channel Gbar to an exponentially falling function of "
-		"electrotonic distance from soma, provided L is under 1.0 lambdas. "
-		"\n"
-		"A dirty hack to get rid of a channel is to set the function to "
-		" 0. But you should preferably use clearChanDistrib instead.\n"
-		"\n\n Note that the pathOnCell is relative to the parent Neuron ",
-		new EpFunc3< Neuron, string, string, string >(
-			&Neuron::assignChanDistrib )
-	);
-	static DestFinfo clearChanDistrib( "clearChanDistrib",
-		"Clears out a previously assigned channel distribution. "
-		"Args are chanName, pathOnCell "
-		"\n\n Note that the pathOnCell is relative to the parent Neuron ",
-		new EpFunc2< Neuron, string, string >(
-			&Neuron::clearChanDistrib )
-	);
-	static DestFinfo parseChanDistrib( "parseChanDistrib",
-		"Parses a previously assigned vector of channel distributions. "
-		"These are located in the field *channelDistribution*. "
-		"When this function is called it builds the specified channels on "
-		"the cell model loaded over self.",
-		new EpFunc0< Neuron >(
-			&Neuron::parseChanDistrib )
-	);
-	static DestFinfo parseMechSpec( "parseMechSpec",
-		"Parses a previously assigned vector of mechanism specifications. "
-		"These are located in the field *mechSpec*. "
-		"When this function is called it builds the specified mechanisms "
-		"into the current neuron model.",
-		new EpFunc0< Neuron >(
-			&Neuron::parseMechSpec )
+	static DestFinfo setSpineAndPsdMesh( "setSpineAndPsdMesh",
+		"Assigns the spine and psd mesh to the Neuron. This is used "
+		"to build up a mapping from Spine entries on the Neuron to "
+		"chem spines and PSDs, so that volume change operations from "
+		"the Spine can propagate to the chem systems.",
+		new OpFunc2< Neuron, Id, Id >( &Neuron::setSpineAndPsdMesh )
 	);
 
 	/*
@@ -446,7 +388,21 @@ const Cinfo* Neuron::initCinfo()
 	static DestFinfo saveAsDotP( "saveAsDotP", fname )
 	static DestFinfo saveAsSwc( "saveAsSwc", fname )
 	*/
+	/////////////////////////////////////////////////////////////////////
+	// FieldElement
+	/////////////////////////////////////////////////////////////////////
+	static FieldElementFinfo< Neuron, Spine > spineFinfo(
+		"spine",
+		"Field Element for spines. Used to handle dynamic "
+		"geometry changes in spines. ",
+		Spine::initCinfo(),
+		&Neuron::lookupSpine,
+		&Neuron::setNumSpines,
+		&Neuron::getNumSpines,
+		false
+	);
 	
+	/////////////////////////////////////////////////////////////////////
 	static Finfo* neuronFinfos[] = 
 	{ 	
 		&RM,						// ValueFinfo
@@ -458,29 +414,32 @@ const Cinfo* Neuron::initCinfo()
 		&sourceFile,				// ValueFinfo
 		&compartmentLengthInLambdas,	// ValueFinfo
 		&numCompartments,			// ReadOnlyValueFinfo
+		&numSpines,					// ReadOnlyValueFinfo
 		&numBranches,				// ReadOnlyValueFinfo
 		&pathDistFromSoma,			// ReadOnlyValueFinfo
 		&geomDistFromSoma,			// ReadOnlyValueFinfo
 		&elecDistFromSoma,			// ReadOnlyValueFinfo
 		&compartments,				// ReadOnlyValueFinfo
 		&channelDistribution,		// ValueFinfo
-		&mechSpec,					// ValueFinfo
-		&spineSpecification,		// ValueFinfo
+		&passiveDistribution,		// ValueFinfo
+		&spineDistribution,			// ValueFinfo
+		// &mechSpec,				// ValueFinfo
+		// &spineSpecification,		// ValueFinfo
+		&compartmentsFromExpression,	// ReadOnlyLookupValueFinfo
+		&valuesFromExpression,		// ReadOnlyLookupValueFinfo
+		&spinesFromExpression,  	// ReadOnlyLookupValueFinfo
 		&buildSegmentTree,			// DestFinfo
-		&insertSpines,				// DestFinfo
-		&clearSpines,				// DestFinfo
-		&parseSpines,				// DestFinfo
-		&assignChanDistrib,			// DestFinfo
-		&clearChanDistrib,			// DestFinfo
-		&parseChanDistrib,			// DestFinfo
-		&parseMechSpec,				// DestFinfo
+		&setSpineAndPsdMesh,		// DestFinfo
+		&spineFinfo,				// FieldElementFinfo
 	};
 	static string doc[] =
 	{
 		"Name", "Neuron",
 		"Author", "C H Chaitanya, Upi Bhalla",
-		"Description", "Neuron - Manager for neurons."
-		" Handles high-level specification of channel distribution.",
+		"Description", "Neuron - Manager for neurons. "
+		"Handles high-level specification of distribution of "
+		"spines, channels and passive properties. Also manages "
+		"spine resizing through a Spine FieldElement. ",
 	};
 	static Dinfo<Neuron> dinfo;
 	static Cinfo neuronCinfo(
@@ -508,8 +467,193 @@ Neuron::Neuron()
 			phi_( 0.0 ),
 			sourceFile_( "" ),
 			compartmentLengthInLambdas_( 0.2 ),
-			spineIndex_( 0 )
+			spineEntry_( this )
 {;}
+
+// When copying Neuron, we next have to rerun buildSegmentTree() and 
+// setSpineAndPsdMesh
+Neuron::Neuron( const Neuron& other )
+	: 
+			RM_( other.RM_ ),
+			RA_( other.RA_ ),
+			CM_( other.CM_ ),
+			Em_( other.Em_ ),
+			theta_( other.theta_ ),
+			phi_( other.phi_ ),
+			sourceFile_( other.sourceFile_ ),
+			compartmentLengthInLambdas_(other.compartmentLengthInLambdas_),
+			channelDistribution_( other.channelDistribution_ ),
+			passiveDistribution_( other.passiveDistribution_ ),
+			spineDistribution_( other.spineDistribution_ ),
+			spineEntry_( this )
+{;}
+////////////////////////////////////////////////////////////////////////
+// Some static utility functions.
+////////////////////////////////////////////////////////////////////////
+
+
+bool parseDistrib( vector< vector < string > >& lines, 
+				const vector< string >& distrib )
+{
+	lines.clear();
+	vector< string > temp;
+	for ( unsigned int i = 0; i < distrib.size(); ++i ) {
+		if ( distrib[i] == "" ) {
+			if ( temp.size() < 4 ) {
+				cout << "Warning: Neuron::parseDistrib: <4 args: " << 
+						temp.size() << endl;
+				return false;
+			}
+			if ( temp.size() % 2 == 1 ) {
+				cout << "Warning: Neuron::parseDistrib: : odd # of args:"
+					   	<< temp.size() << endl;
+				return false;
+			}
+			lines.push_back( temp );
+			temp.clear();
+		} else {
+			temp.push_back( distrib[i] );
+		}
+	}
+	return true;
+}
+
+static void doClassSpecificMessaging( Shell* shell, Id obj, ObjId compt )
+{
+	if ( obj.element()->cinfo()->isA( "ChanBase" ) ) {
+		shell->doAddMsg( "Single", compt, "channel", obj, "channel" );
+	}
+	ReadCell::addChannelMessage( obj );
+}
+
+static bool buildFromProto( 
+		const string& name,
+		const vector< ObjId >& elist, const vector< double >& val,
+		vector< ObjId >& mech )
+{
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+	Id proto( "/library/" + name );
+	if ( proto == Id() ) {
+		cout << "Warning: Neuron::buildFromProto: proto '"
+			   	<< name << "' not found, skipping\n";
+		return false;
+	}
+	mech.clear();
+	mech.resize( elist.size() );
+	for ( unsigned int i = 0; i < elist.size(); ++i ) {
+		unsigned int j = i * nuParser::numVal;
+		if ( val[ j + nuParser::EXPR ] > 0 ) {
+			string name = proto.element()->getName();
+			Id obj = Neutral::child( elist[i].eref(), name );
+			if ( obj == Id() ) { // Need to copy it in from proto.
+				obj = shell->doCopy( proto, elist[i], name, 1, false, false );
+				doClassSpecificMessaging( shell, obj, elist[i] );
+			}
+			mech[i] = obj;
+		}
+	}
+	return true;
+}
+
+static void assignParam( Id obj, const string& field, 
+				double val, double len, double dia )
+{
+	if ( obj.element()->cinfo()->isA( "ChanBase" ) ) {
+		if ( field == "Gbar" ) {
+			if ( val > 0 )
+				Field< double >::set( obj, "Gbar", val * len * dia * PI );
+		} else if ( field == "Ek" ) {
+			Field< double >::set( obj, "Ek", val );
+		}
+	} else if ( obj.element()->cinfo()->isA( "CaConcBase" ) ) {
+		if ( field == "CaBasal" || field == "tau" || field == "thick" ||
+		  field == "floor" || field == "ceiling" ) {
+			Field< double >::set( obj, field, val );
+		} else if ( field == "B" ) {
+			// The system obeys dC/dt = B*I_Ca - C/tau
+			// So B = arg/( vol * F ). Here the system provides vol and F,
+			// so the arg is just a scale factor over this, typically
+			// to be thought of in terms of buffering. Small B is more
+			// buffering.
+			Field< double >::set( obj, "B", val / 
+				( FaradayConst * len * dia * dia * PI / 4.0 ) );
+		}
+	}
+}
+
+static void assignSingleCompartmentParams( ObjId compt,
+			double val, const string& field, double len, double dia )
+{
+	if ( field == "initVm" || field == "INITVM" ) {
+		Field< double >::set( compt, "initVm", val );
+		return;
+	}
+	if ( field == "Em" || field == "EM" ) {
+		Field< double >::set( compt, "Em", val );
+		return;
+	}
+	if ( val > 0.0 ) {
+		if ( field == "Rm" || field == "Ra" || field == "Cm" ) {
+			Field< double >::set( compt, field, val );
+		} else if ( field == "RM" ) {
+			Field< double >::set( compt, "Rm", val / ( len  * dia * PI ) );
+		} else if ( field == "RA" ) {
+			Field< double >::set( compt, "Ra", val*len*4 / (dia*dia*PI) );
+		} else if ( field == "CM" ) {
+			Field< double >::set( compt, "Cm", val * len * dia * PI );
+		} else {
+			cout << "Warning: setCompartmentParam: field '" << field << 
+				"' not found\n";
+		}
+	}
+}
+
+static void setCompartmentParams( 
+		const vector< ObjId >& elist, const vector< double >& val,
+		const string& field, const string& expr )
+{
+	try {
+		nuParser parser( expr );
+		for ( unsigned int i = 0; i < elist.size(); ++i ) {
+			unsigned int j = i * nuParser::numVal;
+			if ( val[ j + nuParser::EXPR ] > 0 ) {
+				double len = val[j + nuParser::LEN ];
+				double dia = val[j + nuParser::DIA ];
+				double x = parser.eval( val.begin() + j );
+				assignSingleCompartmentParams( elist[i],
+					x, field, len, dia );
+			}
+		}
+	}
+	catch ( mu::Parser::exception_type& err )
+	{
+		cout << err.GetMsg() << endl;
+	}
+}
+
+static void setMechParams( 
+		const vector< ObjId >& mech,
+		const vector< ObjId >& elist, const vector< double >& val,
+		const string& field, const string& expr )
+{
+	try {
+		nuParser parser ( expr );
+		for ( unsigned int i = 0; i < elist.size(); ++i ) {
+			unsigned int j = i * nuParser::numVal;
+			if ( val[ j + nuParser::EXPR ] > 0 ) {
+				double len = val[j + nuParser::LEN ];
+				double dia = val[j + nuParser::DIA ];
+				double x = parser.eval( val.begin() + j );
+				assignParam( mech[i], field, x, len, dia );
+			}
+		}
+	}
+	catch ( mu::Parser::exception_type& err )
+	{
+		cout << err.GetMsg() << endl;
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////
 // ValueFinfos
 ////////////////////////////////////////////////////////////////////////
@@ -609,6 +753,13 @@ unsigned int Neuron::getNumCompartments() const
 	return segId_.size();
 }
 
+/*
+unsigned int Neuron::getNumSpines() const
+{
+	return spineParentIndex_.size();
+}
+*/
+
 unsigned int Neuron::getNumBranches() const
 {
 	return branches_.size();
@@ -646,45 +797,169 @@ vector< ObjId > Neuron::getCompartments() const
 	return ret;
 }
 
-void Neuron::setChannelDistribution( vector< string > v )
+/**
+ * Digest the path and the math expression to obtain an elist of 
+ * compartments that satisfy both criteria. 
+ * The argument 'line' has path 
+ * followed by the math expression, separated by a space.
+ */
+vector< ObjId > Neuron::getExprElist( const Eref& e, string line ) const
 {
-	if ( v.size() % 3 != 0 ) {
-		cout << "Warning: Neuron::setChannelDistribution: vec must "
-				"have 3N entries. \n" << v.size() << " entries found."
-				"Value unchanged\n";
-		return;
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+	vector< ObjId > ret;
+	vector< ObjId > elist;
+	vector< double > val;
+	unsigned long pos = line.find_first_of( " \t" );
+	string path = line.substr( 0, pos );
+	string expr = line.substr( pos );
+	ObjId oldCwe = shell->getCwe();
+	shell->setCwe( e.objId() );
+	wildcardFind( path, elist );
+	shell->setCwe( oldCwe );
+	if ( elist.size() == 0 )
+		return ret;
+	evalExprForElist( elist, expr, val );
+	ret.reserve( elist.size() );
+	for ( unsigned int i = 0; i < elist.size(); ++i ) {
+		if ( val[i * nuParser::numVal] > 0 )
+			ret.push_back( elist[i] );
 	}
-	channelDistribution_ = v;
+	return ret;
 }
 
-vector< string > Neuron::getChannelDistribution() const
+/**
+ * Digest the path and the math expression to obtain all the
+ * values pertaining to the elements in the path. There are
+ * nuParser::numVal * elist.size() entries.
+ * The argument 'line' has path 
+ * followed by the math expression, separated by a space.
+ */
+vector< double > Neuron::getExprVal( const Eref& e, string line ) const
+{
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+	vector< ObjId > elist;
+	vector< double > val;
+	unsigned long pos = line.find_first_of( " \t" );
+	string path = line.substr( 0, pos );
+	string expr = line.substr( pos );
+	ObjId oldCwe = shell->getCwe();
+	shell->setCwe( e.objId() );
+	wildcardFind( path, elist );
+	shell->setCwe( oldCwe );
+	if ( elist.size() == 0 )
+		return val;
+	evalExprForElist( elist, expr, val );
+	return val;
+}
+
+vector< ObjId > Neuron::getSpinesFromExpression( 
+				const Eref& e, string line ) const
+{
+	vector< ObjId > temp = getExprElist( e, line );
+	// indexed by segIndex, includes all compts in all spines.
+	vector< vector< Id > > allSpinesPerCompt( segId_.size() ); 
+	for ( unsigned int i = 0; i < spines_.size(); ++i ) {
+		assert( allSpinesPerCompt.size() > spineParentSegIndex_[i] );
+		vector< Id >& s = allSpinesPerCompt[ spineParentSegIndex_[i] ];
+		s.insert( s.end(), spines_[i].begin(), spines_[i].end() );
+	}
+	vector< ObjId >ret;
+	for ( vector< ObjId >::iterator
+					i = temp.begin(); i != temp.end(); ++i ) {
+		map< Id, unsigned int >::const_iterator si = 
+				segIndex_.find( i->id );
+		assert( si != segIndex_.end() );
+		assert( si->second < segId_.size() );
+		vector< Id >& s = allSpinesPerCompt[ si->second ];
+		ret.insert( ret.end(), s.begin(), s.end() );
+	}
+	return ret;
+}
+
+void Neuron::buildElist( const Eref& e, 
+				const vector< string >& line, 
+				vector< ObjId >& elist, 
+				vector< double >& val )
+{
+	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
+	const string& path = line[1];
+	const string& expr = line[3];
+	ObjId oldCwe = shell->getCwe();
+	shell->setCwe( e.objId() );
+	wildcardFind( path, elist );
+	shell->setCwe( oldCwe );
+	evalExprForElist( elist, expr, val );
+}
+
+void Neuron::setChannelDistribution( const Eref& e, vector< string > v )
+{
+	// Here we should clear the extant channels, if any.
+	vector< vector< string > > lines;
+	if ( parseDistrib( lines, v ) ) {
+		channelDistribution_ = v;
+		for ( unsigned int i = 0; i < lines.size(); ++i ) {
+			vector< string >& temp = lines[i];
+			vector< ObjId > elist;
+			vector< double > val; 
+			buildElist( e, temp, elist, val );
+
+			vector< ObjId > mech( elist.size() );
+			if ( buildFromProto( temp[0], elist, val, mech ) ) {
+				for ( unsigned int j = 2; j < temp.size(); j += 2 ) {
+					setMechParams( mech, elist, val, temp[j], temp[j+1] );
+				}
+			}
+		}
+	}
+}
+
+vector< string > Neuron::getChannelDistribution( const Eref& e ) const
 {
 	return channelDistribution_;
 }
 
-void Neuron::setMechSpec( vector< string > v )
+void Neuron::setPassiveDistribution( const Eref& e, vector< string > v )
 {
-	if ( v.size() < 4 ) {
-		cout << "Warning: Neuron::setMechSpec: syntax: install proto path expr [field expr]...";
-		return;
+	vector< vector< string > > lines;
+	if ( parseDistrib( lines, v ) ) {
+		passiveDistribution_ = v;
+		for ( unsigned int i = 0; i < lines.size(); ++i ) {
+			vector< string >& temp = lines[i];
+			vector< ObjId > elist;
+			vector< double > val; 
+			buildElist( e, temp, elist, val );
+			for ( unsigned int j = 2; j < temp.size(); j += 2 ) {
+				setCompartmentParams( elist, val, temp[j], temp[j+1] );
+			}
+		}
 	}
-	mechSpec_ = v;
 }
 
-vector< string > Neuron::getMechSpec() const
+vector< string > Neuron::getPassiveDistribution( const Eref& e ) const
 {
-	return mechSpec_;
+	return passiveDistribution_;
 }
 
-void Neuron::setSpineSpecification( vector< string > v )
+void Neuron::setSpineDistribution( const Eref& e, vector< string > v )
 {
-	spineSpecification_ = v;
+	// Here we should clear the extant spines, if any.
+	vector< vector< string > > lines;
+	if ( parseDistrib( lines, v ) ) {
+		spineDistribution_ = v;
+		for ( unsigned int i = 0; i < lines.size(); ++i ) {
+			vector< ObjId > elist;
+			vector< double > val; 
+			buildElist( e, lines[i], elist, val );
+			installSpines( elist, val, lines[i] );
+		}
+	}
 }
 
-vector< string > Neuron::getSpineSpecification() const
+vector< string > Neuron::getSpineDistribution( const Eref& e ) const
 {
-	return spineSpecification_;
+	return spineDistribution_;
 }
+
 
 ////////////////////////////////////////////////////////////////////////
 // Stuff here for parsing the compartment tree
@@ -721,10 +996,11 @@ Id fillSegIndex(
 	segIndex.clear();
 	Id fatty;
 	double maxDia = 0.0;
+	unsigned int numKids = 0;
 	for ( unsigned int i = 0; i < kids.size(); ++i ) {
 		const Id& k = kids[i];
 		if ( k.element()->cinfo()->isA( "CompartmentBase" ) ) {
-			segIndex[ k ] = i;
+			segIndex[ k ] = numKids++;
 			const string& s = k.element()->getName();
 			if ( s.find( "soma" ) != s.npos ||
 				s.find( "Soma" ) != s.npos ||
@@ -850,143 +1126,50 @@ void Neuron::buildSegmentTree( const Eref& e )
 }
 
 
-
-////////////////////////////////////////////////////////////////////////
-// Stuff here for assignChanDistrib
-////////////////////////////////////////////////////////////////////////
-
-static Id acquireChannel( Shell* shell, const string& name, ObjId compt )
+/// Fills up vector of segments. First entry is soma.
+void Neuron::setSpineAndPsdMesh( Id spineMesh, Id psdMesh )
 {
-	Id chan = Neutral::child( compt.eref(), name );
-	if ( chan == Id() ) { // Need to make it from prototype.
-		Id proto( "/library/" + name );
-		if ( proto == Id() ) {
-			cout << "Warning: channel proto '" << name << "' not found\n";
-			return Id();
-		}
-		chan = shell->doCopy( proto, compt, name, 1, false, false );
-		// May need to do additional msgs depending on the chan type.
-		if ( chan.element()->cinfo()->isA( "ChanBase" ) ) {
-			shell->doAddMsg( "Single", compt, "channel", chan, "channel" );
-		}
-		ReadCell::addChannelMessage( chan );
-	}
-	return chan;
-}
-
-static void assignParam( Shell* shell, ObjId compt
-				, double val, const string& name, double len, double dia )
-{
-	// Only permit chans with val greater than zero.
-	if ( val > 0.0 ) {
-		if ( name == "Rm" || name == "RM" ) {
-			Field< double >::set( compt, "Rm", val / ( len  * dia * PI ) );
-		} else if ( name == "Ra" || name == "RA" ) {
-			Field< double >::set( compt, "Ra", val*len*4 / (dia*dia*PI) );
-		} else if ( name == "Cm" || name == "CM" ) {
-			Field< double >::set( compt, "Cm", val * len * dia * PI );
-		} else if ( name == "Em" || name == "EM" ) {
-			Field< double >::set( compt, "Em", val );
-		} else if ( name == "initVm" || name == "INITVM" ) {
-			Field< double >::set( compt, "initVm", val );
-		} else {
-			Id chan = acquireChannel( shell, name, compt );
-			if ( chan.element()->cinfo()->isA( "ChanBase" ) ) {
-				Field< double >::set( chan, "Gbar", val * len * dia * PI );
-			} else if ( chan.element()->cinfo()->isA( "CaConcBase" ) ) {
-				Field< double >::set( chan, "B", val );
-			}
-		}
-	}
-}
-
-void Neuron::evalChanParams( 
-	const string& name, const string& func,
-	vector< ObjId >& elist )
-{
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-	// Build the function
-	double r = 0; // geometrical distance arg
-	double L = 0; // electrical distance arg
-	double len = 0; // Length of compt in metres
-	double dia = 0; // Diameter of compt in metres
-	try {
-		mu::Parser parser;
-		parser.DefineVar( "r", &r );
-		parser.DefineVar( "L", &L );
-		parser.DefineVar( "len", &len );
-		parser.DefineVar( "dia", &dia );
-		parser.SetExpr( func );
-
-		// Go through the elist checking for the channels. If not there,
-		// build them. 
-		for ( vector< ObjId >::iterator 
-						i = elist.begin(); i != elist.end(); ++i) {
-			if ( i->element()->cinfo()->isA( "CompartmentBase" ) ) {
-				dia = Field< double >::get( *i, "diameter" );
-				len = Field< double >::get( *i, "length" );
-				map< Id, unsigned int >:: const_iterator j = 
-					segIndex_.find( *i );
-				assert( j != segIndex_.end() );
-				assert( j->second < segs_.size() );
-				r = segs_[ j->second ].getGeomDistFromSoma();
-				L = segs_[ j->second ].getElecDistFromSoma();
-
-				double val = parser.Eval();
-				assignParam( shell, *i, val, name, len, dia );
-			}
-		}
-	}
-	catch ( mu::Parser::exception_type& err )
-	{
-		cout << err.GetMsg() << endl;
-	}
-}
-
-void Neuron::assignChanDistrib( const Eref& e, 
-				string name, string path, string func )
-{
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-	// Go through all child compts recursively, figures out geom and
-	// electrotonic distance to the child. Puts in a map.
-	if ( segIndex_.size() == 0 && segs_.size() == 0 )
-		buildSegmentTree( e );
-
-	// build the elist of affected compartments.
-	vector< ObjId > elist;
-	ObjId oldCwe = shell->getCwe();
-	shell->setCwe( e.objId() );
-	wildcardFind( path, elist );
-	shell->setCwe( oldCwe );
-	if ( elist.size() == 0 )
+	if ( !spineMesh.element()->cinfo()->isA( "SpineMesh" ) ) {
+		cout << "Error: Neuron::setSpineAndPsdMesh: '" << 
+				spineMesh.path() << "' is not a SpineMesh\n";
 		return;
-	evalChanParams( name, func, elist );
-}
-
-void Neuron::clearChanDistrib( const Eref& e, string name, string path )
-{
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-	vector< ObjId > elist;
-	ObjId oldCwe = shell->getCwe();
-	shell->setCwe( e.objId() );
-	path = path + "/" + name;
-	wildcardFind( path, elist );
-	shell->setCwe( oldCwe );
-	if ( elist.size() == 0 )
-		return;
-	for ( vector< ObjId >::iterator 
-		i = elist.begin(); i != elist.end(); ++i) {
-			shell->doDelete( *i );
 	}
-}
-
-void Neuron::parseChanDistrib( const Eref& e )
-{
-	for ( unsigned int i = 0; 3 * i < channelDistribution_.size(); ++i ) {
-		assignChanDistrib( e, 
-						channelDistribution_[i * 3],
-						channelDistribution_[i * 3 + 1],
-						channelDistribution_[i * 3 + 2] );
+	if ( !psdMesh.element()->cinfo()->isA( "PsdMesh" ) ) {
+		cout << "Error: Neuron::setSpineAndPsdMesh: '" << 
+				psdMesh.path() << "' is not a PsdMesh\n";
+		return;
+	}
+	Id spineStoich = Neutral::child( spineMesh.eref(), "stoich" );
+	Id psdStoich = Neutral::child( psdMesh.eref(), "stoich" );
+	if ( spineStoich == Id() || psdStoich == Id() ) {
+		cout << "Error: Neuron::setSpineAndPsdMesh: Stoich child not found\n";
+		return;
+	}
+	
+	vector< Id > spineList = Field< vector< Id > >::get( 
+					spineMesh, "elecComptList" );
+	vector< Id > psdList = Field< vector< Id > >::get( 
+					psdMesh, "elecComptList" );
+	assert( spineList.size()== psdList.size() );
+	map< Id, unsigned int > spineMap; // spineMap[ SpineOnNeuron ] = index
+	for ( unsigned int i = 0; i < spines_.size(); ++i ) {
+		assert( spines_[i].size() > 1 );
+		spineMap[ spines_[i][1] ] = i;
+	}
+	// We don't want to clear this because we can use a single vector
+	// to overlay a number of spine meshes, since each will be a distinct
+	// subset of the full list of spines. None is used twice.
+	// spineToMeshOrdering_.clear();
+	for( unsigned int i = 0; i < spineList.size(); ++i ) {
+		map< Id, unsigned int >::iterator j = spineMap.find( spineList[i]);
+		if ( j == spineMap.end() ) {
+			cout << "Error: Neuron::setSpineAndPsdMesh: spine '" <<
+					spineList[i].path() << "' not found on Neuron\n";
+			return;
+		}
+		spineToMeshOrdering_[ j->second ] = i;
+		spineStoich_[ j->second ] = spineStoich;
+		psdStoich_[ j->second ] = psdStoich;
 	}
 }
 
@@ -995,32 +1178,13 @@ void Neuron::parseChanDistrib( const Eref& e )
 // line is 
 // proto path field expr [field expr]...
 /////////////////////////////////////////////////////////////////////////
-static vector< vector< string > > specLines( const vector< string >& args )
-{
-	vector< string > line;
-	vector< vector< string > > ret;
-	for ( vector< string >::const_iterator
-					i = args.begin(); i != args.end(); ++i ) {
-		if ( *i == "" ) {
-			if ( line.size() < 4 || (line.size() - 4) % 2 != 0 ) {
-				cout << "Warning: Neuron::specLines: bad number of args on line num'" << ret.size() << "'\n";
-			} else {
-				ret.push_back( line );
-			}
-			line.clear();
-		} else {
-			line.push_back( *i );
-		}
-	}
-	return ret;
-}
 
 /**
  * Evaluates expn for every CompartmentBase entry in elist. Pushes
  * value, length and dia for each elist entry into the 'val' vector.
  */
 void Neuron::evalExprForElist( const vector< ObjId >& elist,
-		const string& expn, vector< double >& val )
+		const string& expn, vector< double >& val ) const
 {
 	val.clear();
 	val.resize( elist.size() * nuParser::numVal );
@@ -1036,25 +1200,26 @@ void Neuron::evalExprForElist( const vector< ObjId >& elist,
 		for ( vector< ObjId >::const_iterator 
 			i = elist.begin(); i != elist.end(); ++i ) {
 			if ( i->element()->cinfo()->isA( "CompartmentBase" ) ) {
-				dia = Field< double >::get( *i, "diameter" );
-				len = Field< double >::get( *i, "length" );
 				map< Id, unsigned int >:: const_iterator j = 
 					segIndex_.find( *i );
-				assert( j != segIndex_.end() );
-				assert( j->second < segs_.size() );
-				val[valIndex + nuParser::P] = 
-						segs_[j->second].getPathDistFromSoma();
-				val[valIndex + nuParser::G] = 
+				if ( j != segIndex_.end() ) {
+					dia = Field< double >::get( *i, "diameter" );
+					len = Field< double >::get( *i, "length" );
+					assert( j->second < segs_.size() );
+					val[valIndex + nuParser::P] = 
+							segs_[j->second].getPathDistFromSoma();
+					val[valIndex + nuParser::G] = 
 						segs_[j->second].getGeomDistFromSoma();
-				val[valIndex + nuParser::EL] = 
+					val[valIndex + nuParser::EL] = 
 						segs_[j->second].getElecDistFromSoma();
-				val[valIndex + nuParser::LEN] = len;
-				val[valIndex + nuParser::DIA] = dia;
-				// Can't assign oldVal on first arg
-				val[valIndex + nuParser::OLDVAL] = 0.0; 
+					val[valIndex + nuParser::LEN] = len;
+					val[valIndex + nuParser::DIA] = dia;
+					// Can't assign oldVal on first arg
+					val[valIndex + nuParser::OLDVAL] = 0.0; 
 
-				val[valIndex + nuParser::EXPR] = parser.eval(
+					val[valIndex + nuParser::EXPR] = parser.eval(
 						val.begin() + valIndex );
+				}
 			}
 			valIndex += nuParser::numVal;
 		}
@@ -1062,190 +1227,6 @@ void Neuron::evalExprForElist( const vector< ObjId >& elist,
 	catch ( mu::Parser::exception_type& err )
 	{
 		cout << err.GetMsg() << endl;
-	}
-}
-
-static void doClassSpecificMessaging( Shell* shell, Id obj, ObjId compt )
-{
-	if ( obj.element()->cinfo()->isA( "ChanBase" ) ) {
-		shell->doAddMsg( "Single", compt, "channel", obj, "channel" );
-	}
-	ReadCell::addChannelMessage( obj );
-}
-
-static void buildFromProto( 
-		ObjId proto, 
-		const vector< ObjId >& elist, const vector< double >& val,
-		vector< ObjId >& mech )
-{
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-	mech.clear();
-	mech.resize( elist.size() );
-	for ( unsigned int i = 0; i < elist.size(); ++i ) {
-		unsigned int j = i * nuParser::numVal;
-		if ( val[ j + nuParser::EXPR ] > 0 ) {
-			string name = proto.element()->getName();
-			Id obj = Neutral::child( elist[i].eref(), name );
-			if ( obj == Id() ) { // Need to copy it in from proto.
-				obj = shell->doCopy( proto, elist[i], name, 1, false, false );
-				doClassSpecificMessaging( shell, obj, elist[i] );
-			}
-			mech[i] = obj;
-		}
-	}
-}
-
-static void assignParam( Id obj, const string& field, 
-				double val, double len, double dia )
-{
-	if ( obj.element()->cinfo()->isA( "ChanBase" ) ) {
-		if ( field == "Gbar" ) {
-			if ( val > 0 )
-				Field< double >::set( obj, "Gbar", val * len * dia * PI );
-		} else if ( field == "Ek" ) {
-			Field< double >::set( obj, "Ek", val );
-		}
-	} else if ( obj.element()->cinfo()->isA( "CaConcBase" ) ) {
-		if ( field == "CaBasal" || field == "tau" || field == "thick" ||
-		  field == "floor" || field == "ceiling" ) {
-			Field< double >::set( obj, field, val );
-		} else if ( field == "B" ) {
-			// The system obeys dC/dt = B*I_Ca - C/tau
-			// So B = arg/( vol * F ). Here the system provides vol and F,
-			// so the arg is just a scale factor over this, typically
-			// to be thought of in terms of buffering. Small B is more
-			// buffering.
-			Field< double >::set( obj, "B", val / 
-				( FaradayConst * len * dia * dia * PI / 4.0 ) );
-		}
-	}
-}
-
-static void setMechParams( 
-		const vector< ObjId >& mech,
-		const vector< ObjId >& elist, const vector< double >& val,
-		const string& field, const string& expr )
-{
-	try {
-		nuParser parser ( expr );
-		for ( unsigned int i = 0; i < elist.size(); ++i ) {
-			unsigned int j = i * nuParser::numVal;
-			if ( val[ j + nuParser::EXPR ] > 0 ) {
-				double len = val[j + nuParser::LEN ];
-				double dia = val[j + nuParser::DIA ];
-				double x = parser.eval( val.begin() + j );
-				assignParam( mech[i], field, x, len, dia );
-			}
-		}
-	}
-	catch ( mu::Parser::exception_type& err )
-	{
-		cout << err.GetMsg() << endl;
-	}
-}
-
-static void assignSingleCompartmentParams( ObjId compt,
-			double val, const string& field, double len, double dia )
-{
-	if ( field == "initVm" || field == "INITVM" ) {
-		Field< double >::set( compt, "initVm", val );
-		return;
-	}
-	if ( field == "Em" || field == "EM" ) {
-		Field< double >::set( compt, "Em", val );
-		return;
-	}
-	if ( val > 0.0 ) {
-		if ( field == "Rm" || field == "Ra" || field == "Cm" ) {
-			Field< double >::set( compt, field, val );
-		} else if ( field == "RM" ) {
-			Field< double >::set( compt, "Rm", val / ( len  * dia * PI ) );
-		} else if ( field == "RA" ) {
-			Field< double >::set( compt, "Ra", val*len*4 / (dia*dia*PI) );
-		} else if ( field == "CM" ) {
-			Field< double >::set( compt, "Cm", val * len * dia * PI );
-		} else {
-			cout << "Warning: setCompartmentParam: field '" << field << 
-				"' not found\n";
-		}
-	}
-}
-
-static void setCompartmentParams( 
-		const vector< ObjId >& elist, const vector< double >& val,
-		const string& field, const string& expr )
-{
-	try {
-		nuParser parser( expr );
-		for ( unsigned int i = 0; i < elist.size(); ++i ) {
-			unsigned int j = i * nuParser::numVal;
-			if ( val[ j + nuParser::EXPR ] > 0 ) {
-				double len = val[j + nuParser::LEN ];
-				double dia = val[j + nuParser::DIA ];
-				double x = parser.eval( val.begin() + j );
-				assignSingleCompartmentParams( elist[i],
-					x, field, len, dia );
-			}
-		}
-	}
-	catch ( mu::Parser::exception_type& err )
-	{
-		cout << err.GetMsg() << endl;
-	}
-}
-
-void Neuron::parseMechSpec( const Eref& e )
-{
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-	vector< vector< string > > lines = specLines( mechSpec_ );
-	for ( unsigned int i = 0; i < lines.size(); ++i ) {
-		const string& name = lines[i][0];
-		const string& path = lines[i][1];
-		// const string& field = lines[i][2]; // Not used.
-		const string& expr = lines[i][3];
-
-		vector< ObjId > elist;
-		// val records (expr, len, dia) for each entry in elist.
-		vector< double > val; 
-
-		ObjId oldCwe = shell->getCwe();
-		shell->setCwe( e.objId() );
-		wildcardFind( path, elist );
-		shell->setCwe( oldCwe );
-		evalExprForElist( elist, expr, val );
-		installMechanism( name, elist, val, lines[i] );
-	}
-}
-
-void Neuron::installMechanism( const string& name, 
-		const vector< ObjId >& elist, const vector< double >& val,
-		const vector< string >& line )
-{
-	assert( val.size() == nuParser::numVal * elist.size() );
-	if ( name == "." ) {
-		for ( unsigned int i = 2; i < line.size(); i += 2 ) {
-			setCompartmentParams( elist, val, line[i], line[i+1] );
-		}
-	} else if ( name == "spine" ) { 
-		// Here I can't incrementally assign params, I need it all at once.
-		installSpines( elist, val, line );
-	} else { 
-		Id proto( "/library/" + name );
-		if ( proto == Id() ) {
-			cout << "Warning: Neuron::installMechanisms: proto '" << name << "' not found\n";
-		} else if ( proto.element()->cinfo()->isA( "ChemMesh" ) ) {
-			// Use provided elist to build reac system. Assigning
-			// params is a bit trickier, will have to use compartment
-			// coords which will be coarser than the chem coords.
-			// Assign params by building a new 'mech' vector to
-			// hold all pools under specified compts from elist.
-		} else { // Things like channels and Ca conc.
-			vector< ObjId > mech( elist.size() );
-			buildFromProto( proto, elist, val, mech );
-			for ( unsigned int i = 2; i < line.size(); i += 2 ) {
-				setMechParams( mech, elist, val, line[i], line[i+1] );
-			}
-		}
 	}
 }
 
@@ -1381,6 +1362,7 @@ static void reorientSpine( vector< Id >& spineCompts,
 
 /** 
  * Utility function to add a single spine to the given parent.
+ * Returns vector of added spine contents.
  * parent is parent compartment for this spine.
  * spineProto is just that.
  * pos is position (in metres ) along parent compartment
@@ -1396,7 +1378,7 @@ static void reorientSpine( vector< Id >& spineCompts,
  * k is index of this spine.
  */
 
-static void addSpine( Id parentCompt, Id spineProto, 
+static vector< Id > addSpine( Id parentCompt, Id spineProto, 
 		double pos, double angle, 
 		Vec& x, Vec& y, Vec& z, 
 		double size, 
@@ -1419,6 +1401,7 @@ static void addSpine( Id parentCompt, Id spineProto,
 	// First, build the coordinates vector for the spine. Assume that its
 	// major axis is along the unit vector [1,0,0].
 	vector< Vec > coords;
+	vector< Id > ret; // Filtered to make sure that it returns only compts
 	for ( vector< Id >::iterator i = kids.begin(); i != kids.end(); ++i )
 	{
 		if ( i->element()->cinfo()->isA( "CompartmentBase" ) ) {
@@ -1435,6 +1418,7 @@ static void addSpine( Id parentCompt, Id spineProto,
 			coords.push_back( Vec( x + parentRadius, y, z ) );
 			scaleSpineCompt( *i, size );
 			shell->doMove( *i, parentObject );
+			ret.push_back( *i );
 		}
 	}
 	// Then, take the projection of this along the x vector passed in.
@@ -1443,72 +1427,8 @@ static void addSpine( Id parentCompt, Id spineProto,
 	shell->doDelete( spine ); // get rid of the holder for the spine copy.
 	shell->doAddMsg( "Single", parentCompt, "axial", kids[0], "raxial" );
 	reorientSpine( kids, coords, ppos, pos, angle, x, y, z );
-}
 
-void Neuron::makeSpacingDistrib( vector< double >& pos, 
-				double spacing, double spacingDistrib )
-{
-	unsigned int num = pos.size();
-	if ( spacingDistrib > 0.0 ) {
-		/*
-		 * Here again we need to get rid of the Normal RNG due to speed.
-		Normal ns( spacing, spacingDistrib * spacingDistrib );
-		// We can't have a simple normal distrib, have to guarantee that
-		// we always move forward.
-		double x = 0.0;
-		while ( x <= 0.0 )
-			x = ns.getNextSample() / 2.0;
-		for ( unsigned int j = 0; j < num; ++j ) {
-			pos[j] = x;
-			double temp = 0.0;
-			while ( temp <= 0.0 )
-				temp = ns.getNextSample();
-			x += temp;
-		}
-		*/
-		if ( spacingDistrib > spacing ) {
-			cout << "Warning: Neuron::makeSpacingDistrib: Distribution = "
-					<< spacingDistrib << " must be < spacing = " <<
-					spacing << ". Using " << spacing << endl;
-			spacingDistrib = spacing;
-		}
-		for ( unsigned int j = 0; j < num; ++j ) {
-			pos[j] = spacing * ( 0.5 + j ) + 
-					( 2.0*mtrand() - 1.0 ) * spacingDistrib;
-		}
-	} else {
-		for ( unsigned int j = 0; j < num; ++j ) {
-			pos[j] = spacing * ( 0.5 + j );
-		}
-	}
-}
-
-// All angles in radians.
-static void makeAngleDistrib( vector< double >& theta, 
-				double angle, double angleDistrib, 
-				double rotation, double rotationDistrib )
-{
-	if ( angleDistrib > 0.0 )
-		angle += mtrand() * angleDistrib;
-	unsigned int num = theta.size();
-	if ( rotationDistrib > 0.0 ) {
-		/* Get rid of Normal RNG
-		Normal nr( rotation, rotationDistrib* rotationDistrib );
-		double x = angle;
-		for ( unsigned int j = 0; j < num; ++j ) {
-			theta[j] = x;
-			x += nr.getNextSample();
-		}
-		*/
-		for ( unsigned int j = 0; j < num; ++j ) {
-			theta[j] = angle + rotation * ( 0.5 + j ) +
-				(2.0*mtrand() - 1.0)  * rotationDistrib;
-		}
-	} else {
-		for ( unsigned int j = 0; j < num; ++j ) {
-			theta[j] = angle + rotation * ( 0.5 + j );
-		}
-	}
+	return ret;
 }
 	
 ///////////////////////////////////////////////////////////////////////
@@ -1557,9 +1477,10 @@ string findArg( const vector<string>& line, const string& field )
 }
 
 /// Add entries into the pos vector for a given compartment i.
-static void addPos( unsigned int i, 
+static void addPos( unsigned int segIndex, unsigned int eIndex,
 		double spacing, double spacingDistrib, 
 		double dendLength,
+		vector< unsigned int >& seglistIndex,
 		vector< unsigned int >& elistIndex,
 		vector< double >& pos )
 {
@@ -1567,14 +1488,16 @@ static void addPos( unsigned int i,
 		double position = spacing * 0.5 + 
 				( mtrand() - 0.5 ) * spacingDistrib;
 		while ( position < dendLength ) {
-			elistIndex.push_back( i );
+			seglistIndex.push_back( segIndex );
+			elistIndex.push_back( eIndex );
 			pos.push_back( position );
 			position += spacing + ( mtrand() - 0.5 ) * spacingDistrib;
 		} 
 	} else {
 		for ( double position = spacing * 0.5; 
 				position < dendLength; position += spacing ) {
-			elistIndex.push_back( i );
+			seglistIndex.push_back( segIndex );
+			elistIndex.push_back( eIndex );
 			pos.push_back( position );
 		}
 	}
@@ -1582,6 +1505,7 @@ static void addPos( unsigned int i,
 
 void Neuron::makeSpacingDistrib( const vector< ObjId >& elist, 
 		const vector< double >& val,
+		vector< unsigned int >& seglistIndex,
 		vector< unsigned int >& elistIndex,
 		vector< double >& pos,
 		const vector< string >& line ) const
@@ -1608,8 +1532,14 @@ void Neuron::makeSpacingDistrib( const vector< ObjId >& elist,
 					lookupDend = segIndex_.find( elist[i] );
 				if ( lookupDend != segIndex_.end() ) {
 					double dendLength = segs_[lookupDend->second].length();
-					addPos( i, spacing, spacingDistrib, 
-								dendLength, elistIndex, pos );
+					/////
+					//This is the problem line. Shouldn't we pass in i
+					//rather than lookupDend->second?
+					//addPos( lookupDend->second, spacing, spacingDistrib, 
+					//			dendLength, elistIndex, pos );
+					addPos( lookupDend->second, i, 
+								spacing, spacingDistrib, dendLength, 
+								seglistIndex, elistIndex, pos );
 				}
 			}
 		}
@@ -1714,145 +1644,98 @@ void Neuron::installSpines( const vector< ObjId >& elist,
 	pos.reserve( elist.size() );
 	elistIndex.reserve( elist.size() );
 
-	makeSpacingDistrib( elist, val, elistIndex, pos, line);
+	makeSpacingDistrib( elist, val, 
+					spineParentSegIndex_, elistIndex, pos, line);
 	makeAngleDistrib( elist, val, elistIndex, theta, line );
 	makeSizeDistrib( elist, val, elistIndex, size, line );
-	for ( unsigned int k = 0; k < elistIndex.size(); ++k ) {
-		unsigned int i = elistIndex[k];
+	for ( unsigned int k = 0; k < spineParentSegIndex_.size(); ++k ) {
+		unsigned int i = spineParentSegIndex_[k];
 		Vec x, y, z;
-		coordSystem( soma_, elist[i].id, x, y, z );
-		addSpine( elist[i], spineProto, pos[k], theta[k], 
-					x, y, z, size[k], k );
+		coordSystem( soma_, segId_[i], x, y, z );
+		spines_.push_back( 
+			addSpine( segId_[i], spineProto, pos[k], theta[k], 
+				x, y, z, size[k], k )
+		);
 	}
+	spineToMeshOrdering_.clear();
+	spineToMeshOrdering_.resize( spines_.size(), 0 );
+	spineStoich_.clear();
+	spineStoich_.resize( spines_.size() );
+	psdStoich_.clear();
+	psdStoich_.resize( spines_.size() );
+}
+////////////////////////////////////////////////////////////////////////
+// Interface funcs for spines
+////////////////////////////////////////////////////////////////////////
+
+Spine* Neuron::lookupSpine( unsigned int index )
+{
+	return &spineEntry_;
 }
 
-//////////////////////////////////////////////////////////////////////
-// Here are the oldstyle format functions
-//////////////////////////////////////////////////////////////////////
-/**
- * API function to add a series of spines.
- * 
- * The spineid is the parent object of the prototype spine. The 
- * spine prototype can include any number of compartments, and each
- * can have any number of voltage and ligand-gated channels, as well
- * as CaConc and other mechanisms.
- * The parentList is a list of Object Ids for parent compartments for
- * the new spines
- * The spacingDistrib is the width of a normal distribution around
- * the spacing. Both are in metre units.
- * The reference angle of 0 radians is facing away from the soma.
- * In all cases we assume that the spine will be rotated so that its
- * axis is perpendicular to the axis of the dendrite.
- * The simplest way to put the spine in any random position is to have
- * an angleDistrib of 2 pi. The algorithm selects any angle in the
- * linear range of the angle distrib to add to the specified angle.
- * With each position along the dendrite the algorithm computes a new
- * spine direction, using rotation to increment the angle.
- * Returns list of spines.
- */
-
-void Neuron::insertSpines( const Eref& e, Id spineProto, string path, 
-				vector< double > placement )
+void Neuron::setNumSpines( unsigned int num ) 
 {
-	vector< ObjId > parentList;
-	double args[] = {1.0e-6, 0,0,0,0,0,0};
-	double& spacing = args[0];
-	double& spacingDistrib = args[1];
-	double& sizeDistrib = args[2];
-	double& angle = args[3];
-	double& angleDistrib = args[4];
-	double& rotation = args[5];
-	double& rotationDistrib = args[6];
-	Shell* shell = reinterpret_cast< Shell* >( Id().eref().data() );
-
-	vector< ObjId > somaList;
-	wildcardFind( e.id().path() + "/#soma#", somaList );
-	Id soma = somaList[0];
-
-	for ( unsigned int i = 0; i < 7 && i < placement.size(); ++i ) {
-		args[i] = placement[i];
-	}
-
-	// Do this juggle with cwe so that we can handle rel as well as
-	// absolute paths.
-	ObjId oldCwe = shell->getCwe();
-	shell->setCwe( e.objId() );
-	wildcardFind( path, parentList );
-	shell->setCwe( oldCwe );
-	for ( unsigned int i = 0; i < parentList.size(); ++i ) {
-		Vec x, y, z;
-		double dendLength = coordSystem( soma, parentList[i], x, y, z );
-
-		// Have extra num entries to allow for the random spacing.
-		int num = dendLength / spacing + 2.0; 
-
-		vector< double > pos( num );
-		makeSpacingDistrib( pos, spacing, spacingDistrib );
-
-		vector< double > theta( num );
-		makeAngleDistrib( theta, angle, angleDistrib, 
-						rotation, rotationDistrib );
-
-		vector< double > size( num, 1.0 );
-
-		/* The use of this RNG causes a 100x slowdown in spine setup!
-		 * It uses the alias method, I would have thought Box-Muller would
-		 * be faster but I won't worry about it for now.
-		if ( sizeDistrib > 0.0 ) {
-			Normal nz( 1.0, sizeDistrib* sizeDistrib );
-			for ( int j = 0; j < num; ++j ) {
-				double s = 0.0;
-				while( s <= 0.1 ) // Arb cutoff. Exclude tiny spines.
-					s = nz.getNextSample();
-				size[j] = s;
-			}
-		}
-		*/
-		if ( sizeDistrib > 0.0 ) {
-			if ( sizeDistrib > 0.9 ) {
-				cout << "Warning: Neuron::insertSpines: sizeDistrib = " <<
-					   sizeDistrib << "	too big, using 0.9\n";
-				sizeDistrib = 0.9;
-			}
-			for ( int j = 0; j < num; ++j ) {
-				size[j] = mtrand() * 2.0 * sizeDistrib + 1.0 - sizeDistrib;
-			}
-		}
-		for ( unsigned int j = 0; j < pos.size(); ++j ) {
-			if ( pos[j] > dendLength || pos[j] < 0.0 )
-				break;
-			addSpine( parentList[i], spineProto, pos[j], theta[j], 
-							x, y, z, size[j], spineIndex_++ );
-		}
-	}
-	cout << "Neuron::insertSpines: " << spineIndex_ << " spines inserted\n";
+	/// Ignore it. the number of spines is set when we build the tree.
+	;
 }
 
-void Neuron::parseSpines( const Eref& e )
+unsigned int Neuron::getNumSpines() const
 {
-	for ( unsigned int i = 0; i < spineSpecification_.size(); ++i ) {
-		stringstream ss( spineSpecification_[i] );
-		string proto;
-		string path;
-		vector< double > args( 7, 0.0 );
-		args[0] = 1e-6;
-		ss >> proto >> path >> args[0] >> args[1] >> args[2] >> args[3] >> args[4] >> args[5] >> args[6];
-
-		Id spineProto;
-		if ( proto[0] == '/' )
-			spineProto = Id( proto );
-		else
-			spineProto = Id( "/library/" + proto );
-
-		if ( spineProto == Id() ) {
-			cout << "Warning: Neuron::parseSpines: Unable to find prototype spine: " << proto << endl;
-			return;
-		}
-
-		insertSpines( e, spineProto, path, args );
-	}
+	return spines_.size();
 }
 
-void Neuron::clearSpines( const Eref& e )
+////////////////////////////////////////////////////////////////////////
+// Utility funcs for spines
+////////////////////////////////////////////////////////////////////////
+const vector< Id >& Neuron::spineIds( unsigned int index ) const
 {
+	static vector< Id > fail;
+	if ( index < spines_.size() )
+		return spines_[index];
+	return fail;
+}
+
+void Neuron::scaleBufAndRates( unsigned int spineNum, 
+				double lenScale, double diaScale ) const
+{
+	if ( spineStoich_.size() == 0 ) 
+		// Perhaps no chem stuff in model, but user could have forgotten
+		// to assign psd and spine meshes.
+		return;
+
+	if ( spineNum > spineStoich_.size() ) {
+		cout << "Error: Neuron::scaleBufAndRates: spineNum too big: " <<
+				spineNum << " >= " << spineStoich_.size() << endl;
+		return;
+	}
+	Id ss = spineStoich_[ spineNum ];
+	if ( ss == Id() ) {
+		// The chem system for the spine may not have been defined.
+		// Later figure out how to deal with cases where there is a psd
+		// but no spine.
+		return;
+	}
+	Id ps = psdStoich_[ spineNum ];
+	if ( ps == Id() ) {
+		// The chem system for the spine may not have been defined.
+		return;
+	}
+	double volScale = lenScale * diaScale * diaScale;
+	SetGet2< unsigned int, double >::set( ss, "scaleBufsAndRates", 
+				spineToMeshOrdering_[spineNum], volScale );
+	volScale = diaScale * diaScale;
+	SetGet2< unsigned int, double >::set( ps, "scaleBufsAndRates", 
+				spineToMeshOrdering_[spineNum], volScale );
+}
+
+void Neuron::scaleShaftDiffusion( unsigned int spineNum, 
+				double len, double dia) const
+{
+		;
+}
+
+void Neuron::scaleHeadDiffusion( unsigned int spineNum, 
+				double len, double dia) const
+{
+		;
 }

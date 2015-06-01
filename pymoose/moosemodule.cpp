@@ -723,26 +723,7 @@ extern "C" {
         static map<string, vector <PyGetSetDef>  > getset_defs;
         return getset_defs;
     }
-    
-    // Global storage for every LookupField we create.
-    map<string, PyObject *>& get_inited_lookupfields()
-    {
-        static map<string, PyObject *> inited_lookupfields;
-        return inited_lookupfields;
-    }
-    
-    map< string, PyObject * >& get_inited_destfields()
-    {
-        static map<string, PyObject * > inited_destfields;
-        return inited_destfields;
-    }
 
-    map< string, PyObject *>& get_inited_elementfields()
-    {
-        static map< string, PyObject *> inited_elementfields;
-        return inited_elementfields;
-    }
-    
     /**
        map of fields which are aliased in Python to avoid collision
        with Python keywords.
@@ -905,12 +886,6 @@ extern "C" {
         }
         finalized = true;
         Id shellId = getShell(0, NULL);
-        for (map<string, PyObject *>::iterator it =
-                     get_inited_lookupfields().begin();
-             it != get_inited_lookupfields().end();
-             ++it){
-            Py_XDECREF(it->second);
-        }
         // Clear the memory for PyGetSetDefs. The key
         // (name) was dynamically allocated using calloc. So was the
         // docstring.
@@ -925,15 +900,7 @@ extern "C" {
             // }
         }
         get_getsetdefs().clear();
-        for (map<string, PyObject *>::iterator it = get_inited_destfields().begin();
-             it != get_inited_destfields().end();
-             ++it){
-            Py_XDECREF(it->second);
-        }
         SHELLPTR->doQuit();
-        // // Destroy the Shell object
-        // Neutral* ns = reinterpret_cast<Neutral*>(shellId.element()->data(0));
-        // ns->destroy( shellId.eref(), 0);
         Msg::clearAllMsgs();
         Id::clearAllElements();
 #ifdef USE_MPI
@@ -2315,29 +2282,16 @@ extern "C" {
                               &name)){
             return NULL;
         }
-        // If the DestField already exists, return it
-        string full_name = obj->oid_.path() +
-                "." + string(name);
-        map<string, PyObject * >::iterator it = get_inited_destfields().find(full_name);
-        if (it != get_inited_destfields().end()){
-            Py_INCREF(it->second);
-            return it->second;
-        }
         PyObject * args = PyTuple_New(2);
                 
         PyTuple_SetItem(args, 0, self);
         Py_INCREF(self); // compensate for reference stolen by PyTuple_SetItem
         PyTuple_SetItem(args, 1, PyString_FromString(name));
         _Field * ret = PyObject_New(_Field, &moose_DestField);
-        if (moose_DestField.tp_init((PyObject*)ret, args, NULL) == 0){
-            /* since we are caching the destinfo in inited_destfields
-             * map, we must protect it by increasing refcount, else
-             * will get gc-ed. */
-            Py_INCREF(ret);
-            get_inited_destfields()[full_name] =  (PyObject*)ret;
-        } else{
+        if (moose_DestField.tp_init((PyObject*)ret, args, NULL) != 0){
             Py_XDECREF((PyObject*)ret);
             ret = NULL;
+            PyErr_SetString(PyExc_RuntimeError, "moose_ObjId_get_destField_attr: failed to init DestField object");
         }
         Py_DECREF(args);
         return (PyObject*)ret;
@@ -2370,6 +2324,9 @@ extern "C" {
               With the '_' removed from internal get/set for value
               fields, we cannot separate them out. - Subha Fri Jan 31
               16:43:51 IST 2014
+              
+              The policy changed in the past and hence the following were commented out.
+              - Subha Tue May 26 00:25:28 EDT 2015
              */
             // if (name.find("get") == 0 || name.find("set") == 0){
             //     continue;
@@ -2435,13 +2392,6 @@ extern "C" {
             return NULL;
         }
         assert(name);
-        // If the LookupField already exists, return it
-        string full_name = obj->oid_.path() + "." + string(name);
-        map<string, PyObject * >::iterator it = get_inited_lookupfields().find(full_name);
-        if (it != get_inited_lookupfields().end()){
-            Py_INCREF(it->second);
-            return it->second;
-        }
         /* Create a new instance of LookupField `name` and set it as
          * an attribute of the object self. Create the argument for
          * init method of LookupField.  This will be (fieldname, self) */
@@ -2450,14 +2400,11 @@ extern "C" {
         Py_INCREF(self); // compensate for stolen ref
         PyTuple_SetItem(args, 1, PyString_FromString(name));
         _Field * ret = PyObject_New(_Field, &moose_LookupField);
-        if (moose_LookupField.tp_init((PyObject*)ret, args, NULL) == 0){
-            Py_INCREF((PyObject*)ret);
-            get_inited_lookupfields()[full_name] =  (PyObject*)ret;
-            /* must protect by increasing refcnt, else the lookupfinfo
-             * gets gc-ed. */
-        } else {
+        if (moose_LookupField.tp_init((PyObject*)ret, args, NULL) != 0){
             Py_XDECREF((PyObject*)ret);
             ret = NULL;
+            PyErr_SetString(PyExc_RuntimeError,
+                            "moose_ObjId_get_lookupField_attr: failed to init LookupField object");
         }
         Py_DECREF(args);
         return (PyObject*)ret;
@@ -2517,15 +2464,6 @@ extern "C" {
                               &name)){
             return NULL;
         }
-        // If the ElementField already exists, return it
-        string full_name = obj->oid_.path() + "." + string(name);
-        // cout << "ElementField fullname: " << full_name << endl;
-        map<string, PyObject * >::iterator it = get_inited_elementfields().find(full_name);
-        if (it != get_inited_elementfields().end()){
-            Py_XINCREF(it->second);
-            return it->second;
-        }
-        
         // Create a new instance of ElementField `name` and set it as
         // an attribute of the object `self`.
         // 1. Create the argument for init method of ElementField.  This
@@ -2536,14 +2474,10 @@ extern "C" {
         PyTuple_SetItem(args, 1, PyString_FromString(name));
         _Field * ret = PyObject_New(_Field, &moose_ElementField);
         // 2. Now use this arg to actually create the element field.
-        if (moose_ElementField.tp_init((PyObject*)ret, args, NULL) == 0){
-            // cache the finfo and protect by increasing refcnt, else
-            // the finfo gets gc-ed.
-            Py_INCREF((PyObject*)ret);
-            get_inited_elementfields()[full_name] =  (PyObject*)ret;
-        } else {
+        if (moose_ElementField.tp_init((PyObject*)ret, args, NULL) != 0){
             Py_DECREF((PyObject*)ret);
             ret = NULL;
+            PyErr_SetString(PyExc_RuntimeError, "moose_ObjId_get_elementField_attr: failed to init ElementField object");
         }
         Py_DECREF(args);
         return (PyObject*)ret;

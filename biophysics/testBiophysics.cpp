@@ -1530,6 +1530,7 @@ static Id addCompartment( const string& name,
 
 #include "../utility/Vec.h"
 #include "SwcSegment.h"
+#include "Spine.h"
 #include "Neuron.h"
 #include "../shell/Wildcard.h"
 static void testNeuronBuildTree()
@@ -1576,35 +1577,44 @@ static void testNeuronBuildTree()
 
 	//////////////////////////////////////////////////////////////////
 	// Here we test Neuron::evalExprForElist, which uses the muParser
+	// Note that the wildcard list starts with the spine which is not
+	// a compartment. So the indexing of the arrays e, p and g needs care.
 	vector< ObjId > elist;
 	wildcardFind( "/n/#", elist );
 	Neuron* n = reinterpret_cast< Neuron* >( nid.eref().data() );
 	vector< double > val;
 	n->evalExprForElist( elist, "p + g + L + len + dia + H(1-L)", val );
 	assert( val.size() == 7 * elist.size() );
+	unsigned int j = 0;
 	for ( unsigned int i = 0; i < elist.size(); ++i ) {
-		assert( val[i * 7] == p[i] + g[i] + e[i] + len[i] + dia[i] +
-						( 1.0 - e[i] > 0 ) );
-		assert( doubleEq( val[i * 7 + 1], p[i] ) );
-		assert( doubleEq( val[i * 7 + 2], g[i] ) );
-		assert( doubleEq( val[i * 7 + 3], e[i] ) );
-		assert( doubleEq( val[i * 7 + 4], len[i]  ));
-		assert( doubleEq( val[i * 7 + 5], dia[i] ) );
+		if ( !elist[i].element()->cinfo()->isA( "CompartmentBase" ) )
+			continue;
+		assert( val[i * 7] == p[j] + g[j] + e[j] + len[j] + dia[j] +
+						( 1.0 - e[j] > 0 ) );
+		assert( doubleEq( val[i * 7 + 1], p[j] ) );
+		assert( doubleEq( val[i * 7 + 2], g[j] ) );
+		assert( doubleEq( val[i * 7 + 3], e[j] ) );
+		assert( doubleEq( val[i * 7 + 4], len[j]  ));
+		assert( doubleEq( val[i * 7 + 5], dia[j] ) );
 		assert( doubleEq( val[i * 7 + 6], 0.0 ) );
+		j++;
 	}
 	//////////////////////////////////////////////////////////////////
 	// Here we test Neuron::makeSpacingDistrib, which uses the muParser
 	// n->evalExprForElist( elist, "H(p-50e-6)*5e-6", val );
 	n->evalExprForElist( elist, "H(p-100e-6)*5e-6", val );
+	vector< unsigned int > seglistIndex;
 	vector< unsigned int > elistIndex;
 	vector< double > pos;
 	vector< string > line; // empty, just use the default spacingDistrib=0
-	n->makeSpacingDistrib( elist, val, elistIndex, pos, line ); 
+	n->makeSpacingDistrib( elist, val, seglistIndex, elistIndex, pos, line ); 
 	assert( pos.size() == ((800 - 100)/5) );
 	assert( doubleEq( pos[0], 2.5e-6 ) );
 	assert( doubleEq( pos.back(), 500e-6 - 2.5e-6 ) );
-	assert( elistIndex[0] == 2 );
-	assert( elistIndex.back() == 3 );
+	assert( seglistIndex[0] == 2 );
+	assert( seglistIndex.back() == 3 );
+	assert( elistIndex[0] == 3 );
+	assert( elistIndex.back() == 4 );
 
 	shell->doDelete( nid );
 }
