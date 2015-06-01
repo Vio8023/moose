@@ -21,6 +21,24 @@
 #include "CudaGlobal.h"
 #include "RateLookup.h"
 
+#include <sys/time.h>
+
+typedef unsigned long long u64;
+
+/* get microseconds (us) */
+u64 getTime()
+{
+ struct timeval tv;
+
+ gettimeofday(&tv, NULL);
+
+ u64 ret = tv.tv_usec;
+
+ ret += (tv.tv_sec * 1000 * 1000);
+
+ return ret;
+}
+
 using namespace moose;
 //~ #include "ZombieCompartment.h"
 //~ #include "ZombieCaConc.h"
@@ -34,7 +52,11 @@ const int HSolveActive::INSTANT_Z = 4;
 HSolveActive::HSolveActive()
 {
     caAdvance_ = 1;
+    
+#ifdef USE_CUDA    
 	current_ca_position = 0;
+#endif
+
     // Default lookup table size
     //~ vDiv_ = 3000;    // for voltage
     //~ caDiv_ = 3000;   // for calcium
@@ -218,7 +240,9 @@ void HSolveActive::advanceCalcium()
 
 void HSolveActive::advanceChannels( double dt )
 {
-
+    u64 start_time, end_time;
+    start_time = getTime();
+    
     vector< double >::iterator iv;
     vector< double >::iterator istate = state_.begin();
     vector< int >::iterator ichannelcount = channelCount_.begin();
@@ -252,7 +276,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif    
 #endif
 
-    if(V_.size() < 100 && 0)
+    if(V_.size() < 100)
     {
         for(int i = 0 ; i < V_.size(); ++i)
         {
@@ -433,7 +457,10 @@ void HSolveActive::advanceChannels( double dt )
 
         ++ichannelcount, ++icacount;
     }
-#endif    
+#endif
+    end_time = getTime();
+    
+    printf("GPU AdvanceChannel takes %fms.\n", (end_time - start_time) / 1000.0);       
 }
 
 /**
