@@ -260,24 +260,34 @@ void HSolveActive::advanceChannels( double dt )
 #ifdef DEBUG_STEP
     getchar();
 #endif    
-    vector<double> v_ac;
+    vector<LookupRow> vRow_ac;
     vector<LookupRow> caRow_ac;
     vector<LookupColumn> column_ac;
     
+    vector<LookupRow> vRow_collected_ac(V_.size());
+    vector<LookupRow>::iterator vRowiter;
     iv = V_.begin();
+    vRowiter = vRow_collected_ac.begin();
+    
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
+    printf("Starting row_gpu with %d rows...\n", V_.size());
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif
 
-    // if(V_.size() < 100)
-    // {
-    //     for(int i = 0 ; i < V_.size(); ++i)
-    //     {
-    //         vTable_.row(*iv, *vRowiter);
-    //         iv++;
-    //         vRowiter++;
-    //     }       
+    if(V_.size() < 100)
+    {
+        for(int i = 0 ; i < V_.size(); ++i)
+        {
+            vTable_.row(*iv, *vRowiter);
+            iv++;
+            vRowiter++;
+        }       
 
-    // } else {
-    //     vTable_.row_gpu(iv, vRowiter, V_.size());
-    // }
+    } else {
+        vTable_.row_gpu(iv, vRowiter, V_.size());
+    }
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Starting converting caRow_ to caRow_ac...\n");
@@ -310,6 +320,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif
     std::vector<int>::iterator istate_count_map = state_count_map_.begin();
     for (int i = 0; i < V_.size(); ++i) {
+        vRow = vRow_collected_ac[i];
         icarowcompt = caRowCompt_.begin();
         caBoundary = ica + *icacount;
         
@@ -324,13 +335,15 @@ void HSolveActive::advanceChannels( double dt )
         {
             for(int j = 0; j < *istate_count_map; ++j)
             {
-                v_ac.push_back(V_[i]);
+                vRow_ac.push_back(vRow);
             }
             ++istate_count_map;
         }
         
         ++ichannelcount, ++icacount;
     }
+
+    vRow_collected_ac.clear();  
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
     printf("Finish preparing CUDA advanceChannel! \n");
@@ -340,7 +353,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif    
 #endif    
 
-    advanceChannel_gpu(v_ac, 
+    advanceChannel_gpu(vRow_ac, 
                        caRow_ac, 
                        column_, 
                        vTable_, 
@@ -350,7 +363,7 @@ void HSolveActive::advanceChannels( double dt )
                        &state_power_map_.front(), 
                        dt);
 
-    v_ac.clear();
+    vRow_ac.clear();
     caRow_ac.clear();
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  

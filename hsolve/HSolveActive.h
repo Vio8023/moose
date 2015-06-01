@@ -180,7 +180,7 @@ private:
 
 #ifdef USE_CUDA
 		void advanceChannel_gpu(
-                                            vector<double>&               vRow,
+                                            vector<LookupRow>&               vRow,
                                             vector<LookupRow>&               caRow,
                                             vector<LookupColumn>&            column,                                           
                                             LookupTable&                     vTable,

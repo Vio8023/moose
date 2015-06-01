@@ -65,10 +65,7 @@ public:
 						unsigned int size);
     unsigned int get_num_of_points();
     unsigned int get_num_of_columns();
-    vector<double> get_table();	
-    double get_min();
-    double get_max();
-    double get_dx();					
+    vector<double> get_table();						
 #endif
 
 	/// Actually performs the lookup and the linear interpolation

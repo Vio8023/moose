@@ -97,21 +97,6 @@ vector<double> LookupTable::get_table()
 {
     return LookupTable::table_;
 }
-
-double LookupTable::get_min()
-{
-	return min_;
-}
-
-double LookupTable::get_max()
-{
-	return max_;
-}
-
-double LookupTable::get_dx()
-{
-	return dx_;
-}
 __global__
 void
 row_kernel(double * d_x, 

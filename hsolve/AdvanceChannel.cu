@@ -32,7 +32,7 @@ __global__
 void advanceChannel_kernel(
 	double                          * vTable,
 	const unsigned                  v_nColumns,
-	double                          * v_array,
+	LookupRow                       * v_row_array,
 	LookupColumn                    * column_array,                      
 	double                          * caTable,
 	const unsigned                  ca_nColumns,
@@ -42,39 +42,30 @@ void advanceChannel_kernel(
 	int                             * instant_map,
 	const unsigned                  set_size,
 	double                          dt,
-	const unsigned                  instant_z,
-	const double 					min,
-	const double 					max,
-	const double					dx
+	const unsigned                  instant_z
 	)
 {
 	int tID = threadIdx.x + blockIdx.x * blockDim.x;
 	if ((tID)>= set_size) return;
 	
-	double x = v_array[tID];
+	LookupRow row;
+	LookupColumn col = column_array[tID];
 	
-	if ( x < min )
-		x = min;
-	else if ( x > max )
-		x = max;
-
-	double div = ( x - min ) / dx;
-	double fraction = div - ( unsigned int )div;
-	int rowIndex = (( unsigned int ) div ) * v_nColumns;
-
+	int iInstant = instant_map[tID];
 	int powerIndex = istate_power_map[tID];
+	int iPower = getPower(powerIndex, instant_z);
 	
 	double * iTable;
 	unsigned inCol;
 	
 	// if it is Z power and caRow
 	if (powerIndex > 0 && ca_row_array[powerIndex].rowIndex != -1){
-		rowIndex = ca_row_array[powerIndex].rowIndex;
-		fraction = ca_row_array[powerIndex].fraction;
+		row = ca_row_array[powerIndex];
 		iTable = caTable;
 		inCol = ca_nColumns;
 	}
 	else {
+		row = v_row_array[tID];
 		iTable = vTable;
 		inCol = v_nColumns;
 	}
@@ -82,19 +73,19 @@ void advanceChannel_kernel(
 	double a,b,C1,C2;
 	double *ap, *bp;
 	
-	ap = iTable + rowIndex + column_array[tID].column;
+	ap = iTable + row.rowIndex + col.column;
 	
 	bp = ap + inCol;
 	
 	a = *ap;
 	b = *bp;
-	C1 = a + ( b - a ) * fraction;
+	C1 = a + ( b - a ) * row.fraction;
 	
 	a = *( ap + 1 );
 	b = *( bp + 1 );
-	C2 = a + ( b - a ) * fraction;
+	C2 = a + ( b - a ) * row.fraction;
 	
-	if(instant_map[tID] & getPower(powerIndex, instant_z)) {
+	if(iInstant&iPower) {
 		istate[tID] = C1 / C2;
 	}
 	
@@ -105,7 +96,7 @@ void advanceChannel_kernel(
 }
 
 void HSolveActive::advanceChannel_gpu(
-	vector<double>&				     v_ac,
+	vector<LookupRow>&               vRow,
 	vector<LookupRow>&               caRow,
 	vector<LookupColumn>&            column,                                           
 	LookupTable&                     vTable,
@@ -117,7 +108,7 @@ void HSolveActive::advanceChannel_gpu(
 	)
 {
 	LookupColumn * column_array_d;
-	double * v_ac_d;
+	LookupRow * vRow_array_d;
 	LookupRow * caRow_array_d;
 	int * istate_power_map_d;  
 	double * istate_d;
@@ -128,14 +119,7 @@ void HSolveActive::advanceChannel_gpu(
 	int set_size = column.size();
 	int caSize = caRow.size();
 	
-	cudaEvent_t mem_start, mem_stop;
-	float mem_elapsed;
-	cudaEventCreate(&mem_start);
-	cudaEventCreate(&mem_stop);
-
-	cudaEventRecord(mem_start);
-
-	cudaSafeCall(cudaMalloc((void **)&v_ac_d, 				v_ac.size() * sizeof(double)));   
+	cudaSafeCall(cudaMalloc((void **)&vRow_array_d, 		vRow.size() * sizeof(LookupRow)));   
 	cudaSafeCall(cudaMalloc((void **)&caRow_array_d, 		caRow.size() * sizeof(LookupRow)));  
 
     cudaSafeCall(cudaMalloc((void **)&vTable_d, 			vTable.get_table().size() * sizeof(double)));        
@@ -147,7 +131,7 @@ void HSolveActive::advanceChannel_gpu(
 	cudaSafeCall(cudaMalloc((void **)&instant_map_d, 		set_size * sizeof(int)));      
 
 	cudaSafeCall(cudaMemcpy(column_array_d, &column.front(), sizeof(LookupColumn) * column.size(), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(v_ac_d, &v_ac.front(), sizeof(double) * v_ac.size(), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(vRow_array_d, &vRow.front(), sizeof(LookupRow) * vRow.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(caRow_array_d, &caRow.front(), sizeof(LookupRow) * caRow.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(caTable_d,&(caTable.get_table().front()),caTable.get_table().size()*sizeof(double),cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(vTable_d, &(vTable.get_table().front()), vTable.get_table().size()*sizeof(double), cudaMemcpyHostToDevice));
@@ -156,11 +140,6 @@ void HSolveActive::advanceChannel_gpu(
 	cudaSafeCall(cudaMemcpy(istate_d, istate, set_size*sizeof(double), cudaMemcpyHostToDevice));
 		
 	cudaCheckError();
-	cudaEventRecord(mem_stop);
-	cudaEventSynchronize(mem_stop);
-	cudaEventElapsedTime(&mem_elapsed, mem_start, mem_stop);
-
-	printf("GPU memory transfer time: %fms.\n", mem_elapsed);
 
 	dim3 gridSize(set_size/BLOCK_WIDTH + 1, 1, 1);
 	dim3 blockSize(BLOCK_WIDTH,1,1); 
@@ -174,7 +153,7 @@ void HSolveActive::advanceChannel_gpu(
 	advanceChannel_kernel<<<gridSize,blockSize>>>( 
 		vTable_d,
 		vTable.get_num_of_columns(),
-		v_ac_d,
+		vRow_array_d,
 		column_array_d,
 		caTable_d,
 		caTable.get_num_of_columns(),
@@ -184,10 +163,7 @@ void HSolveActive::advanceChannel_gpu(
 		instant_map_d,
 		set_size,
 		dt,
-		HSolveActive::INSTANT_Z,
-		vTable.get_min(),
-		vTable.get_max(),
-		vTable.get_dx()
+		HSolveActive::INSTANT_Z
 	);
 
 	cudaCheckError(); 
@@ -197,7 +173,7 @@ void HSolveActive::advanceChannel_gpu(
 	cudaSafeCall(cudaDeviceSynchronize());    
  
 	cudaSafeCall(cudaFree(column_array_d));
-	cudaSafeCall(cudaFree(v_ac_d));
+	cudaSafeCall(cudaFree(vRow_array_d));
 	cudaSafeCall(cudaFree(caRow_array_d));
 	cudaSafeCall(cudaFree(vTable_d));
 	cudaSafeCall(cudaFree(caTable_d));
