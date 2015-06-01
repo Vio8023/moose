@@ -76,10 +76,10 @@ class NeuroMesh: public MeshCompt
 							Id cell, vector< ObjId > portion );
 
 		/**
-		 * Separates out the spines attached to the selected groups of
-		 * compartments. Fills out spine, and if needed, psd list.
+		 * Transmits the information about spines to SpineMesh and
+		 * PsdMesh.
 		 */
-		void separateOutSpines( const Eref& e );
+		void transmitSpineInfo( const Eref& e );
 
 		/**
 		 * The SubTree is a contiguous set of compartments to model.
@@ -115,6 +115,9 @@ class NeuroMesh: public MeshCompt
 		vector< Id > getElecComptMap() const;
 		vector< unsigned int > getStartVoxelInCompt() const;
 		vector< unsigned int > getEndVoxelInCompt() const;
+		vector< int > getSpineVoxelOnDendVoxel() const;
+		vector< unsigned int > getDendVoxelsOnCompartment( ObjId compt ) const;
+		vector< unsigned int > getSpineVoxelsOnCompartment( ObjId compt ) const;
 
 		vector< unsigned int > getParentVoxel() const;
 		const vector< double >& vGetVoxelVolume() const;
@@ -307,7 +310,7 @@ class NeuroMesh: public MeshCompt
 		/// Pre-calculation of length of each MeshEntry
 		vector< double > length_;
 
-		double size_; /// Total Volume
+		// double size_; /// Total Volume
 		double diffLength_;	/// Max permitted length constant for diffusion
 		Id cell_; /// Base object for cell model.
 

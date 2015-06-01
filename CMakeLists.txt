@@ -66,7 +66,7 @@ add_definitions(-fPIC)
     #message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
 #endif()
 
-## DO UNIT TESTS 
+# DO UNIT TESTS 
 option(ENABLE_UNIT_TESTS "ENABLE UNIT TESTS IN MOOSE" ON)
 if(ENABLE_UNIT_TESTS)
     MESSAGE("++ Unit testing enabled.")
@@ -87,12 +87,6 @@ if(VERBOSITY)
 else()
     message("++ Moose will be quiet")
     add_definitions(-DQUIET_MODE)
-endif()
-
-option(ENABLE_CUDA "Enable GPU acceleration" ON)
-if(ENABLE_CUDA)
-    FIND_PACKAGE(CUDA REQUIRED)
-    set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode arch=compute_20,code=sm_20)
 endif()
 
 # STATS INSIDE MOOSE
@@ -126,6 +120,7 @@ if(ENABLE_SBML)
         include_directories(${LIBSBML_INCLUDE_DIR})
         find_package(BZip2 REQUIRED)
         find_package(LibXML2 REQUIRED)
+        find_package(ZLIB REQUIRED)
     endif()
 else()
     SET(LIBSBML_FOUND FALSE)
@@ -209,7 +204,9 @@ if(HDF5_FOUND)
 endif()
 
 if(LIBSBML_FOUND)
-    list(APPEND LIBRARIES moose_sbml ${LIBSBML_LIBRARY})
+    list(APPEND LIBRARIES moose_sbml ${LIBSBML_LIBRARY}
+        ${ZLIB_LIBRARIES}
+        )
 endif()
 
 if(LIBXML2_FOUND)
@@ -328,23 +325,12 @@ IF(BUILD_MOOGLI)
     FIND_PACKAGE(SIP REQUIRED)
     FIND_PACKAGE(PyQt4 REQUIRED)
     FIND_PACKAGE(osgQt REQUIRED)
-
-
-    MESSAGE("++ Building MOOGLI")
-    #SET(MOOGL_SRC_PATH ${PROJECT_SOURCE_DIR}/python/moogli)
-    SET(MOOGLI_BUILD_PATH ${CMAKE_BINARY_DIR}/_moogli)
-    #FILE(MAKE_DIRECTORY ${MOOGLI_BUILD_PATH})
-    #ADD_CUSTOM_TARGET(moogli ALL
-        #COMMAND ${CMAKE_COMMAND} ${MOOGL_SRC_PATH}
-        #COMMAND make
-        #WORKING_DIRECTORY ${MOOGLI_BUILD_PATH}
-        #COMMENT "Building and installing MOOGLI"
-        #VERBATIM
-    #) 
+    SET(MOOGLI_BUILD_PATH ${PROJECT_SOURCE_DIR}/python/moogli)
+    MESSAGE("++ Building MOOGLI in ${MOOGLI_BUILD_PATH}")
     add_subdirectory(${PROJECT_SOURCE_DIR}/python/moogli)
     INCLUDE_DIRECTORIES(${CMAKE_SOURCE_DIR}/python/moogli/include)
     LINK_DIRECTORIES(${CMAKE_SOURCE_DIR}/python/moogli)
-else()
+else(BUILD_MOOGLI)
     MESSAGE("++ NOT building MOOGLI")
 endif()
 

@@ -121,6 +121,7 @@ const Cinfo* SpineMesh::initCinfo()
 
 	static Finfo* spineMeshFinfos[] = {
 		&parentVoxel,		// ReadOnlyValueFinfo
+		&neuronVoxel,		// ReadOnlyValueFinfo
 		&elecComptMap,		// ReadOnlyValueFinfo
 		&elecComptList,		// ReadOnlyValueFinfo
 		&startVoxelInCompt,		// ReadOnlyValueFinfo
@@ -458,7 +459,7 @@ void SpineMesh::innerSetNumEntries( unsigned int n )
 void SpineMesh::innerBuildDefaultMesh( const Eref& e,
 	double volume, unsigned int numEntries )
 {
-	cout << "Warning: attempt to build a default spine: not permitted\n";
+	cout << "Warning: SpineMesh::innerBuildDefaultMesh: attempt to build a default spine: not permitted\n";
 }
 
 //////////////////////////////////////////////////////////////////
