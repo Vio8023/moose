@@ -92,7 +92,6 @@ option(ENABLE_CUDA "Enable GPU acceleration" ON)
 if(ENABLE_CUDA)
     FIND_PACKAGE(CUDA REQUIRED)
     set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};-gencode arch=compute_20,code=sm_20)
-<<<<<<< HEAD
     SET(CMAKE_CXX_FLAGS -fPIC)
 else()
     ## Enable/Disable 2011 stupport.
@@ -109,8 +108,6 @@ else()
     else()
         message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
     endif()
-=======
->>>>>>> Sync changes in CMakeLists.txt
 endif()
 
 # STATS INSIDE MOOSE
