@@ -20,10 +20,10 @@
 
 #include <stdio.h>
 #include <cuda.h>
-#include <thrust/copy.h>
-#include <thrust/device_vector.h>
+#include <cuda_runtime_api.h>
 
-#define BLOCK_WIDTH 128
+
+#define BLOCK_WIDTH 256
 
 #define cudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
 #define cudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )

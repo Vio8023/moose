@@ -11,7 +11,6 @@
 #include "HSolveStruct.h"
 #include "HinesMatrix.h"
 #include "HSolvePassive.h"
-#include "RateLookup.h"
 #include "HSolveActive.h"
 #include "HSolve.h"
 #include "../biophysics/CompartmentBase.h"
@@ -19,21 +18,8 @@
 #include "../biophysics/CaConcBase.h"
 #include "ZombieCaConc.h"
 
-#ifndef USE_CUDA
-#define USE_CUDA
-#endif
-
-#ifndef DEBUG
-#define DEBUG
-#endif
-
-#ifndef DEBUG_VERBOSE
-//#define DEBUG_VERBOSE
-#endif
-
-#ifndef DEBUG_STEP
-//#define DEBUG_STEP
-#endif
+#include "CudaGlobal.h"
+#include "RateLookup.h"
 
 using namespace moose;
 //~ #include "ZombieCompartment.h"
@@ -48,7 +34,7 @@ const int HSolveActive::INSTANT_Z = 4;
 HSolveActive::HSolveActive()
 {
     caAdvance_ = 1;
-		current_ca_position = 0;
+	current_ca_position = 0;
     // Default lookup table size
     //~ vDiv_ = 3000;    // for voltage
     //~ caDiv_ = 3000;   // for calcium
@@ -247,7 +233,6 @@ void HSolveActive::advanceChannels( double dt )
 
     LookupRow vRow;
 #ifdef USE_CUDA
-   // printf("Start preparing CUDA advanceChannel...\n");
 #ifdef DEBUG_STEP
     getchar();
 #endif    
@@ -266,25 +251,29 @@ void HSolveActive::advanceChannels( double dt )
     getchar();
 #endif    
 #endif
-    
-    //vTable_.row_gpu(iv, vRowiter, V_.size());
-    for(int i = 0 ; i < V_.size(); ++i)
+
+    if(V_.size() < 100 && 0)
     {
-        vTable_.row(*iv, *vRowiter);
-        iv++;
-        vRowiter++;
+        for(int i = 0 ; i < V_.size(); ++i)
+        {
+            vTable_.row(*iv, *vRowiter);
+            iv++;
+            vRowiter++;
+        }       
+
+    } else {
+        vTable_.row_gpu(iv, vRowiter, V_.size());
     }
+
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Starting converting caRow_ to caRow_ac...\n");
 #ifdef DEBUG_STEP
     getchar();
 #endif    
 #endif 
-   
-    int i;
     
     caRow_ac.resize(caRow_.size());
-    for(i = 0; i < caRow_.size(); ++i)
+    for(int i = 0; i < caRow_.size(); ++i)
     {
         if(caRow_[i])
         {
@@ -306,7 +295,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif    
 #endif
     std::vector<int>::iterator istate_count_map = state_count_map_.begin();
-    for (i = 0; i < V_.size(); ++i) {
+    for (int i = 0; i < V_.size(); ++i) {
         vRow = vRow_collected_ac[i];
         icarowcompt = caRowCompt_.begin();
         caBoundary = ica + *icacount;
@@ -329,12 +318,7 @@ void HSolveActive::advanceChannels( double dt )
         
         ++ichannelcount, ++icacount;
     }
-    
-    //for(i = 0; i < vRow_ac.size(); ++i)
-    //{
-    //    printf("vRow_ac[%d] rowIndex: %d.\n", i, vRow_ac[i].rowIndex);
-    //}
-    
+
     vRow_collected_ac.clear();  
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
@@ -344,7 +328,7 @@ void HSolveActive::advanceChannels( double dt )
     getchar();
 #endif    
 #endif    
-    //printf("set_size: %d, state_ size: %d.\n", column_.size(), state_.size());
+
     advanceChannel_gpu(vRow_ac, 
                        caRow_ac, 
                        column_, 
@@ -354,8 +338,10 @@ void HSolveActive::advanceChannels( double dt )
                        &state_instant_map_.front(), 
                        &state_power_map_.front(), 
                        dt);
+
     vRow_ac.clear();
     caRow_ac.clear();
+
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
     printf("Finish launching CUDA advanceChannel! \n");
 #ifdef DEBUG_STEP
@@ -374,7 +360,6 @@ void HSolveActive::advanceChannels( double dt )
         for ( ; ica < caBoundary; ++ica )
         {
             caTable_.row( *ica, * icarowcompt );
-            //printf("row: %d, fraction: %f.\n", icarowcompt->rowIndex, icarowcompt->fraction);
             ++icarowcompt;
         }   
         /*
