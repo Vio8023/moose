@@ -23,7 +23,7 @@
 #include <cuda_runtime_api.h>
 
 
-#define BLOCK_WIDTH 256
+#define BLOCK_WIDTH 512
 
 #define cudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
 #define cudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )

@@ -9,9 +9,7 @@
 #ifndef _RATE_LOOKUP_H
 #define _RATE_LOOKUP_H
 
-#ifndef USE_CUDA
-#define USE_CUDA
-#endif
+#include "CudaGlobal.h"
 
 using namespace std;
 
