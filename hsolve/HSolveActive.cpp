@@ -344,7 +344,11 @@ void HSolveActive::advanceChannels( double dt )
 
     copy_data(column_,
     		  &column_d,
-    		  &is_inited_);
+    		  &is_inited_,
+    		  state_instant_map_,
+    		  &state_instant_map_d,
+    		  state_power_map_,
+    		  &state_power_map_d);
 
     advanceChannel_gpu(v_ac, 
                        caRow_ac, 
@@ -352,8 +356,8 @@ void HSolveActive::advanceChannels( double dt )
                        vTable_, 
                        caTable_, 
                        &state_.front(), 
-                       &state_instant_map_.front(), 
-                       &state_power_map_.front(), 
+                       state_instant_map_d, 
+                       state_power_map_d, 
                        dt,
                        (int)(column_.size()));
 
@@ -454,7 +458,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif
     end_time = getTime();
     
-    printf("GPU AdvanceChannel takes %fms.\n", (end_time - start_time) / 1000.0);       
+    //printf("GPU AdvanceChannel takes %fms.\n", (end_time - start_time) / 1000.0);       
 }
 LookupColumn * HSolveActive::get_column_d()
 {

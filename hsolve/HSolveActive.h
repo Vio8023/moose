@@ -138,12 +138,18 @@ protected:
     
     vector< int >             state_instant_map_; ///
     vector< int >             state_count_map_;
+    int *					  state_instant_map_d;
+    int *					  state_power_map_d;
     int                       current_ca_position;
     void resetDevice();
     LookupColumn			  *column_d;
 	void copy_data(std::vector<LookupColumn>& column,
-				   LookupColumn ** 			column_dd,
-				   int * 					is_inited);
+							 LookupColumn ** 			column_dd,
+							 int * 						is_inited,
+					std::vector<int>&						instant_map,
+							 int **						instant_map_d,
+					std::vector<int>&						power_map,
+							 int **						power_map_d);
    	int					      is_inited_;
 #endif
     static const int INSTANT_X;
