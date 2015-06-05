@@ -15,6 +15,13 @@
 #include <thrust/system/system_error.h>
 #include <thrust/copy.h>
 
+void HSolveActive::resetDevice()
+{
+	cudaSafeCall(cudaDeviceReset());
+	cudaSafeCall(cudaSetDevice(0));
+	cudaSafeCall(cudaDeviceSynchronize());
+	cudaSafeCall(cudaThreadSynchronize());
+}
 __inline__ __host__ __device__
 unsigned int getPower(int power_map_val, const unsigned int Z)
 {
@@ -104,28 +111,45 @@ void advanceChannel_kernel(
 	}  
 }
 
+void HSolveActive::copy_data(std::vector<LookupColumn>& column,
+							 LookupColumn ** 			column_dd,
+							 int * 						is_inited)
+{
+	if(!*is_inited)
+	{
+		*is_inited = 1;
+		int size = column.size();
+		printf("column size is :%d.\n", size);
+		size = size <= 0?0:size;
+		if(size)
+		{
+			cudaSafeCall(cudaMalloc((void**)column_dd, size * sizeof(LookupColumn)));
+			cudaSafeCall(cudaMemcpy(*column_dd,
+									&(column.front()),
+									size * sizeof(LookupColumn),
+									cudaMemcpyHostToDevice));
+		}
+	}	
+}
 void HSolveActive::advanceChannel_gpu(
 	vector<double>&				     v_ac,
 	vector<LookupRow>&               caRow,
-	vector<LookupColumn>&            column,                                           
+	LookupColumn 					* column,                                           
 	LookupTable&                     vTable,
 	LookupTable&                     caTable,                       
 	double                          * istate,
 	int                             * instant_map,
 	int                             * state_power_map,
-	double                          dt
+	double                          dt,
+	int 							set_size
 	)
 {
-	LookupColumn * column_array_d;
 	double * v_ac_d;
 	LookupRow * caRow_array_d;
 	int * istate_power_map_d;  
 	double * istate_d;
 	int * instant_map_d;
-	double * vTable_d;
-	double * caTable_d;
-	
-	int set_size = column.size();
+
 	int caSize = caRow.size();
 	
 	cudaEvent_t mem_start, mem_stop;
@@ -137,24 +161,28 @@ void HSolveActive::advanceChannel_gpu(
 
 	cudaSafeCall(cudaMalloc((void **)&v_ac_d, 				v_ac.size() * sizeof(double)));   
 	cudaSafeCall(cudaMalloc((void **)&caRow_array_d, 		caRow.size() * sizeof(LookupRow)));  
-
-    cudaSafeCall(cudaMalloc((void **)&vTable_d, 			vTable.get_table().size() * sizeof(double)));        
-	cudaSafeCall(cudaMalloc((void **)&caTable_d,			caTable.get_table().size()* sizeof(double)));    
-
-	cudaSafeCall(cudaMalloc((void **)&column_array_d, 		set_size * sizeof(LookupColumn)));   
+ 
 	cudaSafeCall(cudaMalloc((void **)&istate_d, 			set_size * sizeof(double)));        
 	cudaSafeCall(cudaMalloc((void **)&istate_power_map_d, 	set_size * sizeof(int))); 
 	cudaSafeCall(cudaMalloc((void **)&instant_map_d, 		set_size * sizeof(int)));      
 
-	cudaSafeCall(cudaMemcpy(column_array_d, &column.front(), sizeof(LookupColumn) * column.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(v_ac_d, &v_ac.front(), sizeof(double) * v_ac.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(caRow_array_d, &caRow.front(), sizeof(LookupRow) * caRow.size(), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(caTable_d,&(caTable.get_table().front()),caTable.get_table().size()*sizeof(double),cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(vTable_d, &(vTable.get_table().front()), vTable.get_table().size()*sizeof(double), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(istate_power_map_d, state_power_map, set_size*sizeof(int), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(instant_map_d, instant_map, set_size*sizeof(int), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(istate_d, istate, set_size*sizeof(double), cudaMemcpyHostToDevice));
-		
+	
+	if(!vTable.is_set())
+	{
+		vTable.set_is_set(true);
+		vTable.copy_table();
+
+	}
+	if(!caTable.is_set())
+	{
+		caTable.set_is_set(true);
+		caTable.copy_table();	
+	}
 	cudaCheckError();
 	cudaEventRecord(mem_stop);
 	cudaEventSynchronize(mem_stop);
@@ -172,11 +200,11 @@ void HSolveActive::advanceChannel_gpu(
 	}    
 
 	advanceChannel_kernel<<<gridSize,blockSize>>>( 
-		vTable_d,
+		vTable.get_table_d(),
 		vTable.get_num_of_columns(),
 		v_ac_d,
-		column_array_d,
-		caTable_d,
+		column,
+		caTable.get_table_d(),
 		caTable.get_num_of_columns(),
 		istate_power_map_d,
 		caRow_array_d,
@@ -196,11 +224,8 @@ void HSolveActive::advanceChannel_gpu(
 
 	cudaSafeCall(cudaDeviceSynchronize());    
  
-	cudaSafeCall(cudaFree(column_array_d));
 	cudaSafeCall(cudaFree(v_ac_d));
 	cudaSafeCall(cudaFree(caRow_array_d));
-	cudaSafeCall(cudaFree(vTable_d));
-	cudaSafeCall(cudaFree(caTable_d));
 	cudaSafeCall(cudaFree(istate_d));
 	cudaSafeCall(cudaFree(istate_power_map_d));
 	cudaSafeCall(cudaFree(instant_map_d));

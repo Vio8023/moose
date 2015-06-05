@@ -55,6 +55,8 @@ HSolveActive::HSolveActive()
     
 #ifdef USE_CUDA    
 	current_ca_position = 0;
+	HSolveActive::resetDevice();
+	is_inited_ = 0;
 #endif
 
     // Default lookup table size
@@ -340,15 +342,20 @@ void HSolveActive::advanceChannels( double dt )
 #endif    
 #endif    
 
+    copy_data(column_,
+    		  &column_d,
+    		  &is_inited_);
+
     advanceChannel_gpu(v_ac, 
                        caRow_ac, 
-                       column_, 
+                       column_d, 
                        vTable_, 
                        caTable_, 
                        &state_.front(), 
                        &state_instant_map_.front(), 
                        &state_power_map_.front(), 
-                       dt);
+                       dt,
+                       (int)(column_.size()));
 
     v_ac.clear();
     caRow_ac.clear();
@@ -448,6 +455,10 @@ void HSolveActive::advanceChannels( double dt )
     end_time = getTime();
     
     printf("GPU AdvanceChannel takes %fms.\n", (end_time - start_time) / 1000.0);       
+}
+LookupColumn * HSolveActive::get_column_d()
+{
+	return column_d;
 }
 
 /**
