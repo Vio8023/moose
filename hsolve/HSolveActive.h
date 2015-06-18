@@ -38,7 +38,7 @@ public:
     void setup( Id seed, double dt );
     void step( ProcPtr info );			///< Equivalent to process
     void reinit( ProcPtr info );
-
+    LookupColumn * get_column_d();
 protected:
     /**
      * Solver parameters: exposed as fields in MOOSE
@@ -138,7 +138,19 @@ protected:
     
     vector< int >             state_instant_map_; ///
     vector< int >             state_count_map_;
+    int *					  state_instant_map_d;
+    int *					  state_power_map_d;
     int                       current_ca_position;
+    void resetDevice();
+    LookupColumn			  *column_d;
+	void copy_data(std::vector<LookupColumn>& column,
+							 LookupColumn ** 			column_dd,
+							 int * 						is_inited,
+					std::vector<int>&						instant_map,
+							 int **						instant_map_d,
+					std::vector<int>&						power_map,
+							 int **						power_map_d);
+   	int					      is_inited_;
 #endif
     static const int INSTANT_X;
     static const int INSTANT_Y;
@@ -179,17 +191,16 @@ private:
     void sendValues( ProcPtr info );
 
 #ifdef USE_CUDA
-		void advanceChannel_gpu(
-                                            vector<LookupRow>&               vRow,
-                                            vector<LookupRow>&               caRow,
-                                            vector<LookupColumn>&            column,                                           
-                                            LookupTable&                     vTable,
-                                            LookupTable&                     caTable,                       
-                                            double                          * istate,
-                                            int                             * instant_map,
-                                            int                             * state_power_map,
-                                            double                          dt
-);
+	void advanceChannel_gpu(vector<double>&		vRow,
+                            vector<LookupRow>&	caRow,
+                            LookupColumn		* column,                                           
+                            LookupTable&		vTable,
+                            LookupTable& 		caTable,                       
+                            double				* istate,
+                            int 				* instant_map,
+                            int 				* state_power_map,
+                            double 				dt,
+                            int 				set_size);
 #endif
 
 };

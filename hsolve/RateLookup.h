@@ -65,9 +65,16 @@ public:
 						unsigned int size);
     unsigned int get_num_of_points();
     unsigned int get_num_of_columns();
-    vector<double> get_table();						
+    vector<double> get_table();	
+    double get_min();
+    double get_max();
+    double get_dx();		
+    double * get_state_d();
+    double * get_table_d();
+    bool is_set();	
+    bool set_is_set(bool set_val);	
+    void copy_table();
 #endif
-
 	/// Actually performs the lookup and the linear interpolation
 	void lookup(
 		const LookupColumn& column,
@@ -88,9 +95,11 @@ private:
 	unsigned int         nColumns_;		///< (# columns) = 2 * (# species)
 
 #ifdef USE_CUDA
-	double				 *istate_d;		///< device array of istate
+	double				 *state_d;		///< device array of istate
 	double 				 *table_d;		///< device array of the flattened table
-#endif
+	bool is_set_;
+#endif	
+
 
 };
 

@@ -33,6 +33,7 @@ LookupTable::LookupTable(
 	
 	//~ interpolate_.resize( nSpecies );
 	table_.resize( nPts_ * nColumns_ );
+	is_set_ = false;
 }
 
 void LookupTable::addColumns(
@@ -84,6 +85,44 @@ void LookupTable::row( double x, LookupRow& row )
 }
 
 #ifdef USE_CUDA
+void LookupTable::copy_table()
+{
+
+	int size =LookupTable::table_.size();
+	if(size <= 0) 
+	{
+		size = 0;
+	}
+
+	if(size > 0)
+	{
+		cudaSafeCall(cudaMalloc((void **)&(LookupTable::table_d),
+								size * sizeof(double))); 
+
+		cudaSafeCall(cudaMemcpy(LookupTable::table_d,
+								&(LookupTable::table_.front()), 
+								size * sizeof(double), 
+								cudaMemcpyHostToDevice));		
+	}
+
+}
+double * LookupTable::get_state_d()
+{
+	return  LookupTable::state_d;
+}
+double * LookupTable::get_table_d()
+{
+	return  LookupTable::table_d;
+}
+bool LookupTable::is_set()
+{
+	return LookupTable::is_set_;
+}
+bool LookupTable::set_is_set(bool set_val)
+{
+	LookupTable::is_set_ = set_val;
+	return LookupTable::is_set();
+}
 unsigned int LookupTable::get_num_of_points()
 {
     return LookupTable::nPts_;
@@ -96,6 +135,21 @@ unsigned int LookupTable::get_num_of_columns()
 vector<double> LookupTable::get_table()
 {
     return LookupTable::table_;
+}
+
+double LookupTable::get_min()
+{
+	return min_;
+}
+
+double LookupTable::get_max()
+{
+	return max_;
+}
+
+double LookupTable::get_dx()
+{
+	return dx_;
 }
 __global__
 void
