@@ -40,6 +40,8 @@ u64 getTime()
 }
 
 using namespace moose;
+using namespace thrust;
+
 //~ #include "ZombieCompartment.h"
 //~ #include "ZombieCaConc.h"
 
@@ -262,24 +264,27 @@ void HSolveActive::advanceChannels( double dt )
 #ifdef DEBUG_STEP
     getchar();
 #endif    
-    vector<double> v_ac;
-    vector<LookupRow> caRow_ac;
+
+    vector<float> caRow_ac;
     vector<LookupColumn> column_ac;
     
     iv = V_.begin();
 
-    // if(V_.size() < 100)
-    // {
-    //     for(int i = 0 ; i < V_.size(); ++i)
-    //     {
-    //         vTable_.row(*iv, *vRowiter);
-    //         iv++;
-    //         vRowiter++;
-    //     }       
+    vector<float> v_row(V_.size());
+    vector<float>::iterator v_row_iter = v_row.begin();
 
-    // } else {
-    //     vTable_.row_gpu(iv, vRowiter, V_.size());
-    // }
+    if(V_.size() < 1024)
+    {
+        for(int i = 0 ; i < V_.size(); ++i)
+        {
+            vTable_.row(*iv, *v_row_iter);
+            iv++;
+            v_row_iter++;
+        }       
+
+    } else {
+        vTable_.row_gpu(iv, vRowiter, V_.size());
+    }
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Starting converting caRow_ to caRow_ac...\n");
@@ -293,13 +298,11 @@ void HSolveActive::advanceChannels( double dt )
     {
         if(caRow_[i])
         {
-            caRow_ac[i] = *(caRow_[i]);
+            caRow_ac[i] = caRow_[i]->rowIndex + caRow_[i]->fraction;
         } 
         else
         {
-            LookupRow * newRow = (LookupRow *) malloc(sizeof(LookupRow));
-            newRow->rowIndex = -1;
-            caRow_ac[i] = *newRow;
+            caRow_ac[i] = -1.0f;
         } 
        
     }
@@ -310,7 +313,7 @@ void HSolveActive::advanceChannels( double dt )
     getchar();
 #endif    
 #endif
-    std::vector<int>::iterator istate_count_map = state_count_map_.begin();
+
     for (int i = 0; i < V_.size(); ++i) {
         icarowcompt = caRowCompt_.begin();
         caBoundary = ica + *icacount;
@@ -321,17 +324,7 @@ void HSolveActive::advanceChannels( double dt )
             ++icarowcompt;
         }
         
-        chanBoundary = ichan + *ichannelcount;
-        for ( ; ichan < chanBoundary; ++ichan )
-        {
-            for(int j = 0; j < *istate_count_map; ++j)
-            {
-                v_ac.push_back(V_[i]);
-            }
-            ++istate_count_map;
-        }
-        
-        ++ichannelcount, ++icacount;
+        ++icacount;
     }
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  
@@ -341,27 +334,28 @@ void HSolveActive::advanceChannels( double dt )
     getchar();
 #endif    
 #endif    
-
     copy_data(column_,
     		  &column_d,
     		  &is_inited_,
-    		  state_instant_map_,
-    		  &state_instant_map_d,
-    		  state_power_map_,
-    		  &state_power_map_d);
+    		  channel_data_,
+    		  &channel_data_d,
+    		  HSolveActive::INSTANT_X,
+              HSolveActive::INSTANT_Y,
+              HSolveActive::INSTANT_Z);
 
-    advanceChannel_gpu(v_ac, 
+    advanceChannel_gpu(v_row, 
                        caRow_ac, 
                        column_d, 
                        vTable_, 
                        caTable_, 
                        &state_.front(), 
-                       state_instant_map_d, 
-                       state_power_map_d, 
+                       channel_data_d,
                        dt,
-                       (int)(column_.size()));
+                       (int)(column_.size()),
+                       (int)(channel_data_.size()),
+                       V_.size());
 
-    v_ac.clear();
+    v_row.clear();
     caRow_ac.clear();
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  

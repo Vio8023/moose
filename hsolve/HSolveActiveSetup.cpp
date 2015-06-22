@@ -154,6 +154,9 @@ void HSolveActive::readHHChannels()
     double X = 0.0, Y = 0.0, Z = 0.0;
     double Xpower = 0.0, Ypower = 0.0, Zpower = 0.0;
     int instant = 0;
+#ifdef USE_CUDA    
+    int nState = 0;
+#endif
 
     for ( icompt = compartmentId_.begin(); icompt != compartmentId_.end(); ++icompt )
     {
@@ -188,51 +191,53 @@ void HSolveActive::readHHChannels()
             channel.setPowers( Xpower, Ypower, Zpower );
             channel.instant_ = instant;
             channel.modulation_ = modulation;
-
+#ifdef USE_CUDA
+            ChannelData c;
+            Xpower > 0?pack_x(c, 1):pack_x(c, 0);
+            Ypower > 0?pack_y(c, 1):pack_y(c, 0);
+            Zpower > 0?pack_z(c, 1):pack_z(c, 0);
+            pack_instant(c, instant);
+            pack_compartment_index(c, icompt - compartmentId_.begin());
+            pack_state_index(c, nState);
+#endif
             /*
              * Map channel index to state index. This is useful in the
              * interface to find gate values.
              */
-            chan2state_.push_back( state_.size() );
-#ifdef USE_CUDA             
-            int state_count = 0;
-#endif            
+            chan2state_.push_back( state_.size() );        
             if ( Xpower > 0.0 )
             {
                 state_.push_back( X );
-#ifdef USE_CUDA                
-                state_power_map_.push_back(- INSTANT_X);
-                state_instant_map_.push_back(instant);
-                state_count ++;
-#endif            
-						}     
+#ifdef USE_CUDA
+                nState ++;
+#endif                
+			}     
             if ( Ypower > 0.0 )
             {
-                state_.push_back( Y );
-#ifdef USE_CUDA                   
-                state_power_map_.push_back(- INSTANT_Y);
-                state_instant_map_.push_back(instant);
-                state_count ++;
-#endif                
-					  }
+                state_.push_back( Y );  
+#ifdef USE_CUDA
+                nState ++;
+#endif
+			}
             if ( Zpower > 0.0 )
             {
                 state_.push_back( Z );
-#ifdef USE_CUDA                   
-                state_power_map_.push_back(current_ca_position);
-                state_instant_map_.push_back(instant);
+#ifdef USE_CUDA          
+                pack_ca_row_index(c, current_ca_position);
+                nState ++;         
                 current_ca_position++;
 #endif                   
-						}
+			}
+
+#ifdef USE_CUDA
+            channel_data_.push_back(c);
+#endif            
             /*
              * Map channel index to compartment index. This is useful in the
              * interface to generate channel Ik values (since we then need the
              * compartment Vm).
              */
-            chan2compt_.push_back( icompt - compartmentId_.begin() );
-#ifdef USE_CUDA             
-            state_count_map_.push_back(state_count);
-#endif            
+            chan2compt_.push_back( icompt - compartmentId_.begin() );            
         }
     }
 

@@ -23,6 +23,65 @@
 #include <cuda_runtime_api.h>
 
 
+typedef unsigned long long u64;
+typedef u64 ChannelData;
+
+const u64 X_SHIFT_BIT =63,
+          Y_SHIFT_BIT =62,
+          Z_SHIFT_BIT =61,
+          CA_ROW_SHIFT_BIT =45,
+          INSTANT_SHIFT_BIT =42,
+          COMPARTMENT_SHIFT_BIT = 26,
+          STATE_SHIFT_BIT = 0;
+const u64 X_MASK = 1 << X_SHIFT_BIT,
+          Y_MASK = 1 << Y_SHIFT_BIT,
+          Z_MASK = 1 << Z_SHIFT_BIT,
+          CA_ROW_MASK = 0x10 << CA_ROW_SHIFT_BIT,
+          INSTANT_MASK = 0x7 << INSTANT_SHIFT_BIT,
+          COMPARTMENT_MASK = 0x3F << COMPARTMENT_SHIFT_BIT,
+          STATE_MASK = 0x3FFFFFF << STATE_SHIFT_BIT;
+inline
+void pack_x(u64& data, int x)
+{
+    data |= (((u64)x << X_SHIFT_BIT) & X_MASK);
+}
+
+inline
+void pack_y(u64& data, int y)
+{
+    data |= (((u64)y << Y_SHIFT_BIT) & Y_MASK);
+}
+
+inline
+void pack_z(u64& data, int z)
+{
+    data |= (((u64)z << Z_SHIFT_BIT) & Z_MASK);
+}
+
+inline
+void pack_ca_row_index(u64& data, int ca_row_index)
+{
+    data |= (((u64)ca_row_index << CA_ROW_SHIFT_BIT) & CA_ROW_MASK);
+}
+
+inline
+void pack_instant(u64& data, int instant)
+{
+    data |= (((u64)instant << INSTANT_SHIFT_BIT) & INSTANT_MASK);
+}
+
+inline
+void pack_compartment_index(u64& data, int compartment_index)
+{
+    data |= (((u64)compartment_index << COMPARTMENT_SHIFT_BIT) & COMPARTMENT_MASK);
+}
+
+inline
+void pack_state_index(u64& data, int state_index)
+{
+    data |= (((u64)state_index << STATE_SHIFT_BIT) & STATE_MASK);
+}
+
 #define BLOCK_WIDTH 512
 
 #define cudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )

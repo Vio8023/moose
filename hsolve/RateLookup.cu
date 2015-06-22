@@ -85,6 +85,18 @@ void LookupTable::row( double x, LookupRow& row )
 }
 
 #ifdef USE_CUDA
+void LookupTable::row(double x,float& row)
+{
+	if ( x < min_ )
+		x = min_;
+	else if ( x > max_ )
+		x = max_;
+	
+	double div = ( x - min_ ) / dx_;
+	unsigned int integer = ( unsigned int )( div );
+	row = integer * nColumns_ + (div - integer);
+
+}
 void LookupTable::copy_table()
 {
 
@@ -182,7 +194,36 @@ row_kernel(double * d_x,
 	d_row[tid].rowIndex = integer * nColumns;
 }
 
-void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterator& row, unsigned int size){
+__global__
+void
+row_kernel(double * d_x, 
+		   float * row, 
+		   double min,
+		   double max, 
+		   double dx,
+		   unsigned int nColumns, 
+		   unsigned int size)
+{
+			   
+	int tid = threadIdx.x + blockIdx.x * blockDim.x;
+	
+	if(tid >= size) return;
+	
+	double x = d_x[tid];
+	
+	if ( x < min )
+		x = min;
+	else if ( x > max )
+		x = max;
+	
+	double div = ( x - min ) / dx;
+	unsigned int integer = ( unsigned int )( div );
+	
+	row[tid] = integer * nColumns + (div - integer);
+}
+
+void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterator& row, unsigned int size)
+{
 
 #ifdef DEBUG_VERBOSE
 	printf("start row_gpu calculation...\n");
@@ -242,6 +283,42 @@ void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterat
 #ifdef DEBUG_VERBOSE    
     printf("finish row_gpu calculation...\n");
 #endif 
+}
+
+void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned int size)
+{
+
+#ifdef DEBUG_VERBOSE
+	printf("start row_gpu calculation...\n");
+#endif	
+
+	thrust::device_vector<double> d_x(size);	
+	cudaSafeCall(cudaMalloc((void**)row, sizeof(float) * size, cudaMemcpyHostToDevice));	
+	thrust::copy(x, x + size, d_x.begin());
+	double * d_x_p = thrust::raw_pointer_cast(d_x.data());
+
+    dim3 gridSize(size/BLOCK_WIDTH + 1, 1, 1);
+    dim3 blockSize(BLOCK_WIDTH,1,1);
+
+    if(size <= BLOCK_WIDTH)
+    {
+    	gridSize.x = 1;
+    	blockSize.x = size;
+    }
+    
+    row_kernel<<<gridSize, blockSize>>>(d_x_p, 
+    									row, 
+    									min_, 
+    									max_, 
+    									dx_, 
+    									nColumns_, 
+    									size);	
+    
+    cudaSafeCall(cudaDeviceSynchronize()); 
+
+#ifdef DEBUG_VERBOSE    
+    printf("kernel launch finished...\n");
+#endif
 }
 #endif
 

@@ -27,6 +27,7 @@
 
 #include "CudaGlobal.h"
 #include "RateLookup.h"
+#include <thrust/scan.h>
 
 class HSolveActive: public HSolvePassive
 {
@@ -134,23 +135,19 @@ protected:
 		*   channels so that you can send out Calcium concentrations in only
 		*   those compartments. */
 #ifdef USE_CUDA    
-    vector< int >             state_power_map_;  ///state map to - Instant for x,y , map to index of caRow for z
-    
-    vector< int >             state_instant_map_; ///
-    vector< int >             state_count_map_;
-    int *					  state_instant_map_d;
-    int *					  state_power_map_d;
     int                       current_ca_position;
+    vector<ChannelData>		  channel_data_;
+    ChannelData 			  * channel_data_d;
     void resetDevice();
     LookupColumn			  *column_d;
 	void copy_data(std::vector<LookupColumn>& column,
-							 LookupColumn ** 			column_dd,
-							 int * 						is_inited,
-					std::vector<int>&						instant_map,
-							 int **						instant_map_d,
-					std::vector<int>&						power_map,
-							 int **						power_map_d);
-   	int					      is_inited_;
+                             LookupColumn **            column_dd,
+                             int *                      is_inited,
+                             vector<ChannelData>&       channel_data,
+                             ChannelData **             channel_data_dd,
+                             const int                  x,
+                             const int                  y,
+                             const int                  z);
 #endif
     static const int INSTANT_X;
     static const int INSTANT_Y;
@@ -191,16 +188,19 @@ private:
     void sendValues( ProcPtr info );
 
 #ifdef USE_CUDA
-	void advanceChannel_gpu(vector<double>&		vRow,
-                            vector<LookupRow>&	caRow,
-                            LookupColumn		* column,                                           
-                            LookupTable&		vTable,
-                            LookupTable& 		caTable,                       
-                            double				* istate,
-                            int 				* instant_map,
-                            int 				* state_power_map,
-                            double 				dt,
-                            int 				set_size);
+	void advanceChannel_gpu(
+    vector<float>&                   v_row,
+    vector<float>&                   caRow,
+    LookupColumn                    * column,                                           
+    LookupTable&                     vTable,
+    LookupTable&                     caTable,                       
+    double                          * istate,
+    ChannelData                     * channel,
+    double                          dt,
+    int                             set_size,
+    int                             channel_size,
+    int                             num_of_compartment
+    );
 #endif
 
 };

@@ -55,11 +55,13 @@ public:
 	 * Returns the row corresponding to x in the "row" parameter.
 	 * i.e., returns the leftover fraction and the row's start address.
 	 */
-	void row(
-		double x,
-		LookupRow& row );
+	void row(double x,LookupRow& row );
 
 #ifdef USE_CUDA
+	void row(double x,float& row);
+	void row_gpu(vector<double>::iterator& x, 
+				 float ** row, 
+				 unsigned int size);
 	void row_gpu(vector<double>::iterator& x, 
 						vector<LookupRow>::iterator& row, 
 						unsigned int size);
