@@ -156,6 +156,7 @@ void HSolveActive::readHHChannels()
     int instant = 0;
 #ifdef USE_CUDA    
     int nState = 0;
+    bool first = 1;
 #endif
 
     for ( icompt = compartmentId_.begin(); icompt != compartmentId_.end(); ++icompt )
@@ -192,13 +193,67 @@ void HSolveActive::readHHChannels()
             channel.instant_ = instant;
             channel.modulation_ = modulation;
 #ifdef USE_CUDA
-            ChannelData c;
+            ChannelData c = 0ull;
             Xpower > 0?pack_x(c, 1):pack_x(c, 0);
+            if(first){
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);                
+            }
             Ypower > 0?pack_y(c, 1):pack_y(c, 0);
+            if(first){
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);                
+            }
             Zpower > 0?pack_z(c, 1):pack_z(c, 0);
+            if(first){
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);                
+            }
             pack_instant(c, instant);
+            if(first){
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);                
+            }
             pack_compartment_index(c, icompt - compartmentId_.begin());
+            if(first){
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);                
+            }
             pack_state_index(c, nState);
+            if(first)
+            {
+                first = 0;
+                printf("compartment index: %d\n",icompt - compartmentId_.begin());
+                printf("state index: %d\n", nState);
+                char b[65];
+                for (int i = 63; i >= 0; i--)
+                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
+                b[64] = '\0';
+                printf("Data: %s.\n", b);
+
+                char testing[65];
+                u64 k = 0ull;
+                pack_state_index(k, 15);
+                for (int i = 63; i >= 0; i--)
+                    testing[63-i] = ((k >> i) & 1) == 1 ? '1' : '0';
+                testing[64] = '\0';
+                printf("Binary for 15 is %s.\n", testing);
+            }
 #endif
             /*
              * Map channel index to state index. This is useful in the

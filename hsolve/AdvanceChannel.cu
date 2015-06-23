@@ -67,6 +67,21 @@ void HSolveActive::resetDevice()
 	cudaSafeCall(cudaThreadSynchronize());
 }
 
+void HSolveActive::copy_to_device(float ** v_row_array, float * v_row_temp, int size)
+{
+	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(float) * size));
+	cudaSafeCall(cudaMemcpy(*v_row_array, v_row_temp, sizeof(float) * size, cudaMemcpyHostToDevice));
+}
+
+
+__device__ __host__
+void print_binary(char * b, u64 data)
+{
+	for (int i = 63; i >= 0; i--)
+    	b[63-i] = ((data >> i) & 1) == 1 ? '1' : '0';
+    b[64] = '\0';
+}
+
 __global__
 void advanceChannel_kernel(
 	double                          * vTable,
@@ -84,56 +99,109 @@ void advanceChannel_kernel(
 	)
 {
 	int tID = threadIdx.x + blockIdx.x * blockDim.x;
+	int id = tID;
 	if ((tID)>= set_size) return;
-
+	if(tID == 0){
+		printf("tID: %d is doing the following printing.\n", tID);
+	}	
 	u64 data = channel[tID];
+	if(tID == 0)
+	{
+		char b[65];
+		print_binary(b, data);
+		printf("data: %s\n", b);
+	}	
 	tID = get_state_index(data);
+	if(id == 0){
+		printf("state index: %d\n", tID);
+		printf("compartment index: %d\n", get_compartment_index(data));
+	}	
 	float myrow = v_row_array[get_compartment_index(data)];
-	
+	if(id == 0){
+		printf("myrow: %f\n", myrow);
+	}		
 	double * iTable;
 	unsigned inCol;
 	
 	bool xyz[3] = {get_x(data), get_y(data), get_z(data)};
 
-	int index;
-	for(int i = 0; i < 3; ++i)
-	{
-		if(!xyz[i]) continue;
-		// if it is Z power and caRow
-		if (i == 2 && ca_row_array[get_ca_row_index(data)]!= -1.0f){
-			myrow = ca_row_array[get_ca_row_index(data)];
-			iTable = caTable;
-			inCol = ca_nColumns;
-		}
-		else {
-			iTable = vTable;
-			inCol = v_nColumns;
-		}
-		
-		double a,b,C1,C2;
-		double *ap, *bp;
-		
-		ap = iTable + int(myrow) + column_array[tID].column;
-		
-		bp = ap + inCol;
-		
-		a = *ap;
-		b = *bp;
-		C1 = a + ( b - a ) * (myrow - int(myrow));
-		
-		a = *( ap + 1 );
-		b = *( bp + 1 );
-		C2 = a + ( b - a ) * (myrow - int(myrow));
+	if(id == 0){
+		printf("x: %d, y:%d, z:%d\n", xyz[0], xyz[1], xyz[2]);
+	}
 
-		if(get_instant(data) & instant_xyz_d[i]) {
-			istate[tID + i] = C1 / C2;
-		}
+	// for(int i = 0; i < 3; ++i)
+	// {
+	// 	if(id == 0){
+	// 		printf("iteration: %d\n", i);
+	// 	}	
+	// 	if(!xyz[i]) continue;
+	// 	// if it is Z power and caRow
+	// 	if (i == 2 && ca_row_array[get_ca_row_index(data)]!= -1.0f){
+	// 		myrow = ca_row_array[get_ca_row_index(data)];
+	// 		iTable = caTable;
+	// 		inCol = ca_nColumns;
+	// 		if(id == 0){
+	// 			printf("In branch, myrow: %f\n", myrow);
+	// 		}				
+	// 	}
+	// 	else {
+	// 		iTable = vTable;
+	// 		inCol = v_nColumns;
+	// 	}
 		
-		else{
-			double temp = 1.0 + dt / 2.0 * C2;
-			istate[tID + i] = ( istate[tID + i] * ( 2.0 - temp ) + dt * C1 ) / temp;
-		} 
-	} 
+	// 	double a,b,C1,C2;
+	// 	double *ap, *bp;
+	// 	if(id == 0){
+	// 		printf("column: %d\n", column_array[tID].column);
+	// 	}	
+	// 	ap = iTable + int(myrow) + column_array[tID].column;
+		
+	// 	bp = ap + inCol;
+		
+	// 	a = *ap;
+	// 	if(id == 0){
+	// 		printf("[C1] a: %d\n", a);
+	// 	}			
+	// 	b = *bp;
+	// 	if(id == 0){
+	// 		printf("[C1] b: %d\n", b);
+	// 	}		
+	// 	C1 = a + ( b - a ) * (myrow - int(myrow));
+	// 	if(id == 0){
+	// 		printf("[C1] C1: %d\n", C1);
+	// 	}		
+	// 	a = *( ap + 1 );
+	// 	if(id == 0){
+	// 		printf("[C2] a: %d\n", a);
+	// 	}		
+	// 	b = *( bp + 1 );
+	// 	if(id == 0){
+	// 		printf("[C2] b: %d\n", b);
+	// 	}		
+	// 	C2 = a + ( b - a ) * (myrow - int(myrow));
+	// 	if(id == 0){
+	// 		printf("[C2] C2: %d\n", C2);
+	// 	}		
+
+	// 	if(id == 0){
+	// 		printf("Instant: %d, power instant: %d\n", get_instant(data), instant_xyz_d[i]);
+	// 	}		
+
+	// 	if(get_instant(data) & instant_xyz_d[i]) {
+	// 		istate[tID + i] = C1 / C2;
+	// 		if(id == 0){
+	// 			printf("C1/C2 state: %f\n", istate[tID + i]);
+	// 		}		
+	// 	}
+		
+	// 	else{
+	// 		double temp = 1.0 + dt / 2.0 * C2;
+	// 		istate[tID + i] = ( istate[tID + i] * ( 2.0 - temp ) + dt * C1 ) / temp;
+	// 		if(id == 0){
+	// 			printf("branch state: %f\n", istate[tID + i]);
+	// 		}				
+	// 	} 
+	// } 
 }
 
 void HSolveActive::copy_data(std::vector<LookupColumn>& column,
@@ -166,7 +234,7 @@ void HSolveActive::copy_data(std::vector<LookupColumn>& column,
 	}	
 }
 void HSolveActive::advanceChannel_gpu(
-	vector<float>&				     v_row,
+	float *						     v_row_d,
 	vector<float>&               	 caRow,
 	LookupColumn 					* column,                                           
 	LookupTable&                     vTable,
@@ -179,7 +247,6 @@ void HSolveActive::advanceChannel_gpu(
 	int 							num_of_compartment
 	)
 {
-	float * v_row_d;
 	float * caRow_array_d;
 	double * istate_d;
 
@@ -192,12 +259,9 @@ void HSolveActive::advanceChannel_gpu(
 
 	cudaEventRecord(mem_start);
 
-	cudaSafeCall(cudaMalloc((void **)&v_row_d, 				v_row.size() * sizeof(double)));   
 	cudaSafeCall(cudaMalloc((void **)&caRow_array_d, 		caRow.size() * sizeof(float)));  
- 
-	cudaSafeCall(cudaMalloc((void **)&istate_d, 			set_size * sizeof(double)));           
+	cudaSafeCall(cudaMalloc((void **)&istate_d, 			set_size * sizeof(double)));   
 
-	cudaSafeCall(cudaMemcpy(v_row_d, &v_row.front(), sizeof(float) * v_row.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(caRow_array_d, &caRow.front(), sizeof(float) * caRow.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(istate_d, istate, set_size*sizeof(double), cudaMemcpyHostToDevice));
 	
@@ -249,9 +313,8 @@ void HSolveActive::advanceChannel_gpu(
 
 	cudaSafeCall(cudaDeviceSynchronize());    
  
-	cudaSafeCall(cudaFree(v_row_d));
+ 	cudaSafeCall(cudaFree(v_row_d));
 	cudaSafeCall(cudaFree(caRow_array_d));
 	cudaSafeCall(cudaFree(istate_d));
-	
 }
 #endif

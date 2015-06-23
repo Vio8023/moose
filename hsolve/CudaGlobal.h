@@ -11,8 +11,8 @@
 
 #ifdef DEBUG_
 
-//#define DEBUG_VERBOSE
-//#define DEBUG_STEP
+#define DEBUG_VERBOSE
+#define DEBUG_STEP
 
 #endif //DEBUG_
 
@@ -22,7 +22,7 @@
 #include <cuda.h>
 #include <cuda_runtime_api.h>
 
-
+typedef unsigned int u32;
 typedef unsigned long long u64;
 typedef u64 ChannelData;
 
@@ -33,13 +33,13 @@ const u64 X_SHIFT_BIT =63,
           INSTANT_SHIFT_BIT =42,
           COMPARTMENT_SHIFT_BIT = 26,
           STATE_SHIFT_BIT = 0;
-const u64 X_MASK = 1 << X_SHIFT_BIT,
-          Y_MASK = 1 << Y_SHIFT_BIT,
-          Z_MASK = 1 << Z_SHIFT_BIT,
-          CA_ROW_MASK = 0x10 << CA_ROW_SHIFT_BIT,
-          INSTANT_MASK = 0x7 << INSTANT_SHIFT_BIT,
-          COMPARTMENT_MASK = 0x3F << COMPARTMENT_SHIFT_BIT,
-          STATE_MASK = 0x3FFFFFF << STATE_SHIFT_BIT;
+const u64 X_MASK = 1ull << X_SHIFT_BIT,
+          Y_MASK = 1ull << Y_SHIFT_BIT,
+          Z_MASK = 1ull << Z_SHIFT_BIT,
+          CA_ROW_MASK = u64(0x10) << CA_ROW_SHIFT_BIT,
+          INSTANT_MASK = u64(0x7) << INSTANT_SHIFT_BIT,
+          COMPARTMENT_MASK = u64(0x3F) << COMPARTMENT_SHIFT_BIT,
+          STATE_MASK = u64(0x3FFFFFF) << STATE_SHIFT_BIT;
 inline
 void pack_x(u64& data, int x)
 {

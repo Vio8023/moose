@@ -262,6 +262,7 @@ void HSolveActive::advanceChannels( double dt )
     LookupRow vRow;
 #ifdef USE_CUDA
 #ifdef DEBUG_STEP
+    printf("Press [ENTER] to start advanceChannels...\n");
     getchar();
 #endif    
 
@@ -270,20 +271,23 @@ void HSolveActive::advanceChannels( double dt )
     
     iv = V_.begin();
 
-    vector<float> v_row(V_.size());
-    vector<float>::iterator v_row_iter = v_row.begin();
+    float * v_row_array_d;
 
     if(V_.size() < 1024)
     {
-        for(int i = 0 ; i < V_.size(); ++i)
+        vector<float> v_row_temp(V_.size());
+        vector<float>::iterator v_row_iter = v_row_temp.begin();
+        for(u32 i = 0 ; i < V_.size(); ++i)
         {
             vTable_.row(*iv, *v_row_iter);
             iv++;
             v_row_iter++;
         }       
 
+        copy_to_device(&v_row_array_d, &v_row_temp.front(), V_.size());
+
     } else {
-        vTable_.row_gpu(iv, vRowiter, V_.size());
+        vTable_.row_gpu(iv, &v_row_array_d, V_.size());
     }
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
@@ -294,7 +298,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif 
     
     caRow_ac.resize(caRow_.size());
-    for(int i = 0; i < caRow_.size(); ++i)
+    for(u32 i = 0; i < caRow_.size(); ++i)
     {
         if(caRow_[i])
         {
@@ -343,7 +347,7 @@ void HSolveActive::advanceChannels( double dt )
               HSolveActive::INSTANT_Y,
               HSolveActive::INSTANT_Z);
 
-    advanceChannel_gpu(v_row, 
+    advanceChannel_gpu(v_row_array_d, 
                        caRow_ac, 
                        column_d, 
                        vTable_, 
@@ -355,7 +359,6 @@ void HSolveActive::advanceChannels( double dt )
                        (int)(channel_data_.size()),
                        V_.size());
 
-    v_row.clear();
     caRow_ac.clear();
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE)  

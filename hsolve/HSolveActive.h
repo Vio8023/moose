@@ -139,7 +139,9 @@ protected:
     vector<ChannelData>		  channel_data_;
     ChannelData 			  * channel_data_d;
     void resetDevice();
+    void copy_to_device(float ** v_row_array, float * v_row_temp, int size);
     LookupColumn			  *column_d;
+    int                       is_inited_;
 	void copy_data(std::vector<LookupColumn>& column,
                              LookupColumn **            column_dd,
                              int *                      is_inited,
@@ -189,7 +191,7 @@ private:
 
 #ifdef USE_CUDA
 	void advanceChannel_gpu(
-    vector<float>&                   v_row,
+    float *                          v_row,
     vector<float>&                   caRow,
     LookupColumn                    * column,                                           
     LookupTable&                     vTable,

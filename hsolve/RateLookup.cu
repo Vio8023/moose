@@ -293,7 +293,7 @@ void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned in
 #endif	
 
 	thrust::device_vector<double> d_x(size);	
-	cudaSafeCall(cudaMalloc((void**)row, sizeof(float) * size, cudaMemcpyHostToDevice));	
+	cudaSafeCall(cudaMalloc((void**)row, sizeof(float) * size));	
 	thrust::copy(x, x + size, d_x.begin());
 	double * d_x_p = thrust::raw_pointer_cast(d_x.data());
 
@@ -307,13 +307,13 @@ void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned in
     }
     
     row_kernel<<<gridSize, blockSize>>>(d_x_p, 
-    									row, 
+    									*row, 
     									min_, 
     									max_, 
     									dx_, 
     									nColumns_, 
     									size);	
-    
+
     cudaSafeCall(cudaDeviceSynchronize()); 
 
 #ifdef DEBUG_VERBOSE    
