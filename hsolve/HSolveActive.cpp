@@ -21,6 +21,11 @@
 #include "CudaGlobal.h"
 #include "RateLookup.h"
 
+#ifdef USE_CUDA
+#include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
+#endif
+
 #include <sys/time.h>
 
 typedef unsigned long long u64;
@@ -273,7 +278,7 @@ void HSolveActive::advanceChannels( double dt )
 
     float * v_row_array_d;
 
-    if(V_.size() < 1024)
+    if(V_.size() < 1024 && 0)
     {
         vector<float> v_row_temp(V_.size());
         vector<float>::iterator v_row_iter = v_row_temp.begin();
@@ -289,6 +294,18 @@ void HSolveActive::advanceChannels( double dt )
     } else {
         vTable_.row_gpu(iv, &v_row_array_d, V_.size());
     }
+#if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
+    printf("Trying to access v_row_array_d...\n");
+    
+    std::vector<float> h_row(V_.size());
+    cudaSafeCall(cudaMemcpy(&h_row.front(), v_row_array_d, sizeof(float) * V_.size(), cudaMemcpyDeviceToHost));
+    printf("row 0 is %f.\n", h_row[0]);
+    printf("last row is %f.\n", h_row[V_.size() - 1]);
+#ifdef DEBUG_STEP
+    getchar();
+#endif    
+#endif  
+
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Starting converting caRow_ to caRow_ac...\n");

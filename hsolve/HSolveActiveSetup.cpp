@@ -193,67 +193,41 @@ void HSolveActive::readHHChannels()
             channel.instant_ = instant;
             channel.modulation_ = modulation;
 #ifdef USE_CUDA
+            char b[65];
             ChannelData c = 0ull;
             Xpower > 0?pack_x(c, 1):pack_x(c, 0);
-            if(first){
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);                
-            }
             Ypower > 0?pack_y(c, 1):pack_y(c, 0);
-            if(first){
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);                
-            }
             Zpower > 0?pack_z(c, 1):pack_z(c, 0);
-            if(first){
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);                
-            }
-            pack_instant(c, instant);
-            if(first){
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);                
-            }
-            pack_compartment_index(c, icompt - compartmentId_.begin());
-            if(first){
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);                
-            }
-            pack_state_index(c, nState);
-            if(first)
+            if(channel_data_.size() == 15084)
             {
-                first = 0;
-                printf("compartment index: %d\n",icompt - compartmentId_.begin());
-                printf("state index: %d\n", nState);
-                char b[65];
-                for (int i = 63; i >= 0; i--)
-                    b[63-i] = ((c >> i) & 1) == 1 ? '1' : '0';
-                b[64] = '\0';
-                printf("Data: %s.\n", b);
+                printf("x,y,z power: %d %d %d.\n", Xpower, Ypower, Zpower);
+                print_binary(b, c);
+                printf("data: %s.\n", b);
+            }            
+            pack_instant(c, instant);
+            if(channel_data_.size() == 15084)
+            {
+                printf("instant: %d.\n", instant);
+                print_binary(b, c);
+                printf("data: %s.\n", b);
+            }               
+            pack_compartment_index(c, icompt - compartmentId_.begin());
+            if(channel_data_.size() == 15084)
+            {
+                printf("compartment: %d.\n", icompt - compartmentId_.begin());
+                print_binary(b, c);
+                printf("data: %s.\n", b);
+            }              
+            pack_state_index(c, nState);            
+            if(channel_data_.size() == 15084)
+            {
+                printf("state: %d.\n", nState);
+                print_binary(b, c);
+                printf("data: %s.\n", b);
+                getchar();
+            }   
 
-                char testing[65];
-                u64 k = 0ull;
-                pack_state_index(k, 15);
-                for (int i = 63; i >= 0; i--)
-                    testing[63-i] = ((k >> i) & 1) == 1 ? '1' : '0';
-                testing[64] = '\0';
-                printf("Binary for 15 is %s.\n", testing);
-            }
+
 #endif
             /*
              * Map channel index to state index. This is useful in the
@@ -285,6 +259,18 @@ void HSolveActive::readHHChannels()
 			}
 
 #ifdef USE_CUDA
+            if(get_compartment_index(c) >= 3056){
+                printf("x,y,z power: %f %f %f, packed : %d %d %D.\n", 
+                    Xpower, Ypower, Zpower, get_x(c), get_y(c), get_z(c));
+                printf("instant: %d, packed: %d.\n", instant, get_instant(c));
+                printf("compartment: %d, packed: %d.\n", 
+                    icompt - compartmentId_.begin(), get_compartment_index(c));
+                printf("state: %d, packed: %d.\n", nState, get_state_index(c));
+                printf("ca row index: %d, packed: %d.\n", 
+                    current_ca_position - 1, get_ca_row_index(c));
+                print_binary(b, c);
+                printf("data: %s.\n", b);
+            }
             channel_data_.push_back(c);
 #endif            
             /*

@@ -16,6 +16,7 @@ using namespace std;
 #ifdef USE_CUDA
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
+#include <thrust/host_vector.h>
 #endif
 
 
@@ -219,7 +220,8 @@ row_kernel(double * d_x,
 	double div = ( x - min ) / dx;
 	unsigned int integer = ( unsigned int )( div );
 	
-	row[tid] = integer * nColumns + (div - integer);
+	row[tid] = integer * nColumns + float(div - integer);
+	if(tid < 10)printf("tid %d : %f.\n", tid, row[tid]);
 }
 
 void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterator& row, unsigned int size)
@@ -313,7 +315,7 @@ void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned in
     									dx_, 
     									nColumns_, 
     									size);	
-
+    cudaCheckError();
     cudaSafeCall(cudaDeviceSynchronize()); 
 
 #ifdef DEBUG_VERBOSE    
