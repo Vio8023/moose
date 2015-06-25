@@ -58,9 +58,9 @@ public:
 	void row(double x,LookupRow& row );
 
 #ifdef USE_CUDA
-	void row(double x,float& row);
+	void row(double x,double& row);
 	void row_gpu(vector<double>::iterator& x, 
-				 float ** row, 
+				 double ** row, 
 				 unsigned int size);
 	void row_gpu(vector<double>::iterator& x, 
 						vector<LookupRow>::iterator& row, 

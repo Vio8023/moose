@@ -86,7 +86,7 @@ void LookupTable::row( double x, LookupRow& row )
 }
 
 #ifdef USE_CUDA
-void LookupTable::row(double x,float& row)
+void LookupTable::row(double x,double& row)
 {
 	if ( x < min_ )
 		x = min_;
@@ -198,7 +198,7 @@ row_kernel(double * d_x,
 __global__
 void
 row_kernel(double * d_x, 
-		   float * row, 
+		   double * row, 
 		   double min,
 		   double max, 
 		   double dx,
@@ -220,7 +220,7 @@ row_kernel(double * d_x,
 	double div = ( x - min ) / dx;
 	unsigned int integer = ( unsigned int )( div );
 	
-	row[tid] = integer * nColumns + float(div - integer);
+	row[tid] = integer * nColumns + double(div - integer);
 	
 }
 
@@ -287,7 +287,7 @@ void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterat
 #endif 
 }
 
-void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned int size)
+void LookupTable::row_gpu(vector<double>::iterator& x, double ** row, unsigned int size)
 {
 
 #ifdef DEBUG_VERBOSE
@@ -295,7 +295,7 @@ void LookupTable::row_gpu(vector<double>::iterator& x, float ** row, unsigned in
 #endif	
 
 	thrust::device_vector<double> d_x(size);	
-	cudaSafeCall(cudaMalloc((void**)row, sizeof(float) * size));	
+	cudaSafeCall(cudaMalloc((void**)row, sizeof(double) * size));	
 	thrust::copy(x, x + size, d_x.begin());
 	double * d_x_p = thrust::raw_pointer_cast(d_x.data());
 

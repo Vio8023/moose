@@ -271,17 +271,17 @@ void HSolveActive::advanceChannels( double dt )
     getchar();
 #endif    
 
-    vector<float> caRow_ac;
+    vector<double> caRow_ac;
     vector<LookupColumn> column_ac;
     
     iv = V_.begin();
 
-    float * v_row_array_d;
+    double * v_row_array_d;
 
     if(V_.size() < 1024 && 0)
     {
-        vector<float> v_row_temp(V_.size());
-        vector<float>::iterator v_row_iter = v_row_temp.begin();
+        vector<double> v_row_temp(V_.size());
+        vector<double>::iterator v_row_iter = v_row_temp.begin();
         for(u32 i = 0 ; i < V_.size(); ++i)
         {
             vTable_.row(*iv, *v_row_iter);
@@ -297,8 +297,8 @@ void HSolveActive::advanceChannels( double dt )
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Trying to access v_row_array_d...\n");
     
-    std::vector<float> h_row(V_.size());
-    cudaSafeCall(cudaMemcpy(&h_row.front(), v_row_array_d, sizeof(float) * V_.size(), cudaMemcpyDeviceToHost));
+    std::vector<double> h_row(V_.size());
+    cudaSafeCall(cudaMemcpy(&h_row.front(), v_row_array_d, sizeof(double) * V_.size(), cudaMemcpyDeviceToHost));
     printf("row 0 is %f.\n", h_row[0]);
     printf("last row is %f.\n", h_row[V_.size() - 1]);
 #ifdef DEBUG_STEP

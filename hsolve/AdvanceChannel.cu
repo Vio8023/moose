@@ -25,10 +25,10 @@ void HSolveActive::resetDevice()
 	cudaSafeCall(cudaThreadSynchronize());
 }
 
-void HSolveActive::copy_to_device(float ** v_row_array, float * v_row_temp, int size)
+void HSolveActive::copy_to_device(double ** v_row_array, double * v_row_temp, int size)
 {
-	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(float) * size));
-	cudaSafeCall(cudaMemcpy(*v_row_array, v_row_temp, sizeof(float) * size, cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(double) * size));
+	cudaSafeCall(cudaMemcpy(*v_row_array, v_row_temp, sizeof(double) * size, cudaMemcpyHostToDevice));
 }
 
 
@@ -44,12 +44,12 @@ __global__
 void advanceChannel_kernel(
 	double                          * vTable,
 	const unsigned                  v_nColumns,
-	float							* v_row_array,
+	double							* v_row_array,
 	LookupColumn                    * column_array,                      
 	double                          * caTable,
 	const unsigned                  ca_nColumns,
 	ChannelData 					* channel,
-	float                           * ca_row_array,
+	double                           * ca_row_array,
 	double                          * istate,
 	const unsigned                  channel_size,
 	double                          dt,
@@ -83,7 +83,7 @@ void advanceChannel_kernel(
 		printf("compartment index: %d\n", get_compartment_index(data));
 		printf("Instant: %d\n", get_instant(data));
 	}	
-	float myrow = v_row_array[get_compartment_index(data)];
+	double myrow = v_row_array[get_compartment_index(data)];
 	// if(id == 0){
 	// 	printf("myrow: %f\n", myrow);
 	// }		
@@ -163,11 +163,12 @@ void advanceChannel_kernel(
 		
 		else{
 			double temp = 1.0 + dt / 2.0 * C2;
-			istate[tID + i] = ( istate[tID + i] * ( 2.0 - temp ) + dt * C1 ) / temp;
+			istate[tID] = ( istate[tID] * ( 2.0 - temp ) + dt * C1 ) / temp;
 			// if(id == 0){
 			// 	printf("branch state: %f\n", istate[tID + i]);
 			// }				
 		} 
+		tID ++;
 	} 
 }
 
@@ -201,8 +202,8 @@ void HSolveActive::copy_data(std::vector<LookupColumn>& column,
 	}	
 }
 void HSolveActive::advanceChannel_gpu(
-	float *						     v_row_d,
-	vector<float>&               	 caRow,
+	double *						     v_row_d,
+	vector<double>&               	 caRow,
 	LookupColumn 					* column,                                           
 	LookupTable&                     vTable,
 	LookupTable&                     caTable,                       
@@ -214,7 +215,7 @@ void HSolveActive::advanceChannel_gpu(
 	int 							num_of_compartment
 	)
 {
-	float * caRow_array_d;
+	double * caRow_array_d;
 	double * istate_d;
 
 	int caSize = caRow.size();
@@ -226,10 +227,10 @@ void HSolveActive::advanceChannel_gpu(
 
 	cudaEventRecord(mem_start);
 
-	cudaSafeCall(cudaMalloc((void **)&caRow_array_d, 		caRow.size() * sizeof(float)));  
+	cudaSafeCall(cudaMalloc((void **)&caRow_array_d, 		caRow.size() * sizeof(double)));  
 	cudaSafeCall(cudaMalloc((void **)&istate_d, 			set_size * sizeof(double)));   
 
-	cudaSafeCall(cudaMemcpy(caRow_array_d, &caRow.front(), sizeof(float) * caRow.size(), cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMemcpy(caRow_array_d, &caRow.front(), sizeof(double) * caRow.size(), cudaMemcpyHostToDevice));
 	cudaSafeCall(cudaMemcpy(istate_d, istate, set_size*sizeof(double), cudaMemcpyHostToDevice));
 	
 	if(!vTable.is_set())
