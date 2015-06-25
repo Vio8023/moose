@@ -5,6 +5,8 @@
 
 #ifdef USE_CUDA
 
+#define BLOCK_WIDTH 128
+
 #ifndef DEBUG_
 #define DEBUG_
 #endif
@@ -135,7 +137,7 @@ int get_state_index(u64 data)
 {
     return (data & STATE_MASK) >> STATE_SHIFT_BIT;
 }
-#define BLOCK_WIDTH 512
+
 
 #define cudaSafeCall( err ) __cudaSafeCall( err, __FILE__, __LINE__ )
 #define cudaCheckError()    __cudaCheckError( __FILE__, __LINE__ )

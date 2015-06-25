@@ -138,7 +138,6 @@ protected:
     int                       current_ca_position;
     vector<ChannelData>		  channel_data_;
     ChannelData 			  * channel_data_d;
-    void resetDevice();
     void copy_to_device(double ** v_row_array, double * v_row_temp, int size);
     LookupColumn			  *column_d;
     int                       is_inited_;

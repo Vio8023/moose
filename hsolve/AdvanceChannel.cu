@@ -17,14 +17,6 @@
 
 __device__ __constant__ int instant_xyz_d[3];
 
-void HSolveActive::resetDevice()
-{
-	cudaSafeCall(cudaDeviceReset());
-	cudaSafeCall(cudaSetDevice(0));
-	cudaSafeCall(cudaDeviceSynchronize());
-	cudaSafeCall(cudaThreadSynchronize());
-}
-
 void HSolveActive::copy_to_device(double ** v_row_array, double * v_row_temp, int size)
 {
 	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(double) * size));

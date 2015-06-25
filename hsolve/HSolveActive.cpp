@@ -62,7 +62,6 @@ HSolveActive::HSolveActive()
     
 #ifdef USE_CUDA    
 	current_ca_position = 0;
-	HSolveActive::resetDevice();
 	is_inited_ = 0;
 #endif
 
