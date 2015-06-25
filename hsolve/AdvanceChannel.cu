@@ -51,14 +51,14 @@ void advanceChannel_kernel(
 	ChannelData 					* channel,
 	float                           * ca_row_array,
 	double                          * istate,
-	const unsigned                  set_size,
+	const unsigned                  channel_size,
 	double                          dt,
 	const unsigned					num_of_compartment
 	)
 {
 	int tID = threadIdx.x + blockIdx.x * blockDim.x;
 	int id = tID;
-	if ((tID)>= set_size) return;
+	if ((tID)>= channel_size) return;
 	u64 data = channel[tID];
 	if(get_compartment_index(data) >= num_of_compartment)
 	{
@@ -84,32 +84,32 @@ void advanceChannel_kernel(
 		printf("Instant: %d\n", get_instant(data));
 	}	
 	float myrow = v_row_array[get_compartment_index(data)];
-	if(id == 0){
-		printf("myrow: %f\n", myrow);
-	}		
+	// if(id == 0){
+	// 	printf("myrow: %f\n", myrow);
+	// }		
 	double * iTable;
 	unsigned inCol;
 	
 	bool xyz[3] = {get_x(data), get_y(data), get_z(data)};
 
-	if(id == 0){
-		printf("x: %d, y:%d, z:%d\n", xyz[0], xyz[1], xyz[2]);
-	}
+	// if(id == 0){
+	// 	printf("x: %d, y:%d, z:%d\n", xyz[0], xyz[1], xyz[2]);
+	// }
 
 	for(int i = 0; i < 3; ++i)
 	{
-		if(id == 0){
-			printf("iteration: %d\n", i);
-		}	
+		// if(id == 0){
+		// 	printf("iteration: %d\n", i);
+		// }	
 		if(!xyz[i]) continue;
 		// if it is Z power and caRow
 		if (i == 2 && ca_row_array[get_ca_row_index(data)]!= -1.0f){
 			myrow = ca_row_array[get_ca_row_index(data)];
 			iTable = caTable;
 			inCol = ca_nColumns;
-			if(id == 0){
-				printf("In branch, myrow: %f\n", myrow);
-			}				
+			// if(id == 0){
+			// 	printf("In branch, myrow: %f\n", myrow);
+			// }				
 		}
 		else {
 			iTable = vTable;
@@ -118,55 +118,55 @@ void advanceChannel_kernel(
 		
 		double a,b,C1,C2;
 		double *ap, *bp;
-		if(id == 0){
-			printf("column: %d\n", column_array[tID].column);
-		}	
+		// if(id == 0){
+		// 	printf("column: %d\n", column_array[tID].column);
+		// }	
 		ap = iTable + int(myrow) + column_array[tID].column;
 		
 		bp = ap + inCol;
 		
 		a = *ap;
-		if(id == 0){
-			printf("[C1] a: %f\n", a);
-		}			
+		// if(id == 0){
+		// 	printf("[C1] a: %f\n", a);
+		// }			
 		b = *bp;
-		if(id == 0){
-			printf("[C1] b: %f\n", b);
-		}		
+		// if(id == 0){
+		// 	printf("[C1] b: %f\n", b);
+		// }		
 		C1 = a + ( b - a ) * (myrow - int(myrow));
-		if(id == 0){
-			printf("[C1] C1: %f\n", C1);
-		}		
+		// if(id == 0){
+		// 	printf("[C1] C1: %f\n", C1);
+		// }		
 		a = *( ap + 1 );
-		if(id == 0){
-			printf("[C2] a: %f\n", a);
-		}		
+		// if(id == 0){
+		// 	printf("[C2] a: %f\n", a);
+		// }		
 		b = *( bp + 1 );
-		if(id == 0){
-			printf("[C2] b: %f\n", b);
-		}		
+		// if(id == 0){
+		// 	printf("[C2] b: %f\n", b);
+		// }		
 		C2 = a + ( b - a ) * (myrow - int(myrow));
-		if(id == 0){
-			printf("[C2] C2: %f\n", C2);
-		}		
+		// if(id == 0){
+		// 	printf("[C2] C2: %f\n", C2);
+		// }		
 
-		if(id == 0){
-			printf("Instant: %d, power instant: %d\n", get_instant(data), instant_xyz_d[i]);
-		}		
+		// if(id == 0){
+		// 	printf("Instant: %d, power instant: %d\n", get_instant(data), instant_xyz_d[i]);
+		// }		
 
 		if(get_instant(data) & instant_xyz_d[i]) {
 			istate[tID + i] = C1 / C2;
-			if(id == 0){
-				printf("C1/C2 state: %f\n", istate[tID + i]);
-			}		
+			// if(id == 0){
+			// 	printf("C1/C2 state: %f\n", istate[tID + i]);
+			// }		
 		}
 		
 		else{
 			double temp = 1.0 + dt / 2.0 * C2;
 			istate[tID + i] = ( istate[tID + i] * ( 2.0 - temp ) + dt * C1 ) / temp;
-			if(id == 0){
-				printf("branch state: %f\n", istate[tID + i]);
-			}				
+			// if(id == 0){
+			// 	printf("branch state: %f\n", istate[tID + i]);
+			// }				
 		} 
 	} 
 }
@@ -253,7 +253,7 @@ void HSolveActive::advanceChannel_gpu(
 	dim3 gridSize(channel_size/BLOCK_WIDTH + 1, 1, 1);
 	dim3 blockSize(BLOCK_WIDTH,1,1); 
 
-	if(set_size <= BLOCK_WIDTH)
+	if(channel_size <= BLOCK_WIDTH)
 	{
 		gridSize.x = 1;
 		blockSize.x = channel_size; 
@@ -269,7 +269,7 @@ void HSolveActive::advanceChannel_gpu(
 		channel,
 		caRow_array_d,
 		istate_d,
-		set_size,
+		channel_size,
 		dt,
 		num_of_compartment
 	);

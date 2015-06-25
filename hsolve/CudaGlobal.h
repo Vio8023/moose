@@ -11,7 +11,7 @@
 
 #ifdef DEBUG_
 
-#define DEBUG_VERBOSE
+//#define DEBUG_VERBOSE
 //#define DEBUG_STEP
 
 #endif //DEBUG_

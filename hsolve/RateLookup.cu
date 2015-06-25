@@ -221,7 +221,7 @@ row_kernel(double * d_x,
 	unsigned int integer = ( unsigned int )( div );
 	
 	row[tid] = integer * nColumns + float(div - integer);
-	if(tid < 10)printf("tid %d : %f.\n", tid, row[tid]);
+	
 }
 
 void LookupTable::row_gpu(vector<double>::iterator& x, vector<LookupRow>::iterator& row, unsigned int size)

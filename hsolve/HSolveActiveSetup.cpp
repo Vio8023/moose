@@ -198,34 +198,34 @@ void HSolveActive::readHHChannels()
             Xpower > 0?pack_x(c, 1):pack_x(c, 0);
             Ypower > 0?pack_y(c, 1):pack_y(c, 0);
             Zpower > 0?pack_z(c, 1):pack_z(c, 0);
-            if(channel_data_.size() == 15084)
-            {
-                printf("x,y,z power: %d %d %d.\n", Xpower, Ypower, Zpower);
-                print_binary(b, c);
-                printf("data: %s.\n", b);
-            }            
+            // if(channel_data_.size() == 15084)
+            // {
+            //     printf("x,y,z power: %d %d %d.\n", Xpower, Ypower, Zpower);
+            //     print_binary(b, c);
+            //     printf("data: %s.\n", b);
+            // }            
             pack_instant(c, instant);
-            if(channel_data_.size() == 15084)
-            {
-                printf("instant: %d.\n", instant);
-                print_binary(b, c);
-                printf("data: %s.\n", b);
-            }               
+            // if(channel_data_.size() == 15084)
+            // {
+            //     printf("instant: %d.\n", instant);
+            //     print_binary(b, c);
+            //     printf("data: %s.\n", b);
+            // }               
             pack_compartment_index(c, icompt - compartmentId_.begin());
-            if(channel_data_.size() == 15084)
-            {
-                printf("compartment: %d.\n", icompt - compartmentId_.begin());
-                print_binary(b, c);
-                printf("data: %s.\n", b);
-            }              
+            // if(channel_data_.size() == 15084)
+            // {
+            //     printf("compartment: %d.\n", icompt - compartmentId_.begin());
+            //     print_binary(b, c);
+            //     printf("data: %s.\n", b);
+            // }              
             pack_state_index(c, nState);            
-            if(channel_data_.size() == 15084)
-            {
-                printf("state: %d.\n", nState);
-                print_binary(b, c);
-                printf("data: %s.\n", b);
-                getchar();
-            }   
+            // if(channel_data_.size() == 15084)
+            // {
+            //     printf("state: %d.\n", nState);
+            //     print_binary(b, c);
+            //     printf("data: %s.\n", b);
+            //     getchar();
+            // }   
 
 
 #endif
@@ -259,18 +259,18 @@ void HSolveActive::readHHChannels()
 			}
 
 #ifdef USE_CUDA
-            if(get_compartment_index(c) >= 3056){
-                printf("x,y,z power: %f %f %f, packed : %d %d %D.\n", 
-                    Xpower, Ypower, Zpower, get_x(c), get_y(c), get_z(c));
-                printf("instant: %d, packed: %d.\n", instant, get_instant(c));
-                printf("compartment: %d, packed: %d.\n", 
-                    icompt - compartmentId_.begin(), get_compartment_index(c));
-                printf("state: %d, packed: %d.\n", nState, get_state_index(c));
-                printf("ca row index: %d, packed: %d.\n", 
-                    current_ca_position - 1, get_ca_row_index(c));
-                print_binary(b, c);
-                printf("data: %s.\n", b);
-            }
+            // if(get_compartment_index(c) >= 3056 || get_compartment_index(c) == 3055){
+            //     printf("x,y,z power: %f %f %f, packed : %d %d %d.\n", 
+            //         Xpower, Ypower, Zpower, get_x(c), get_y(c), get_z(c));
+            //     printf("instant: %d, packed: %d.\n", instant, get_instant(c));
+            //     printf("compartment: %d, packed: %d.\n", 
+            //         icompt - compartmentId_.begin(), get_compartment_index(c));
+            //     printf("state: %d, packed: %d.\n", nState, get_state_index(c));
+            //     printf("ca row index: %d, packed: %d.\n", 
+            //         current_ca_position - 1, get_ca_row_index(c));
+            //     print_binary(b, c);
+            //     printf("data: %s.\n", b);
+            // }
             channel_data_.push_back(c);
 #endif            
             /*
