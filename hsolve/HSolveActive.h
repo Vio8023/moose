@@ -135,6 +135,8 @@ protected:
 		*   channels so that you can send out Calcium concentrations in only
 		*   those compartments. */
 #ifdef USE_CUDA    
+		double total_time[10];
+		int total_count;
     int                       current_ca_position;
     vector<ChannelData>		  channel_data_;
     ChannelData 			  * channel_data_d;

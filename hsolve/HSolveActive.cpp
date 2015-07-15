@@ -63,6 +63,11 @@ HSolveActive::HSolveActive()
 #ifdef USE_CUDA    
 	current_ca_position = 0;
 	is_inited_ = 0;
+	for(int i = 0; i < 10; ++i)
+	{
+		total_time[i] = 0;
+	}
+	total_count = 0;
 #endif
 
     // Default lookup table size
@@ -73,8 +78,31 @@ HSolveActive::HSolveActive()
 //////////////////////////////////////////////////////////////////////
 // Solving differential equations
 //////////////////////////////////////////////////////////////////////
-void HSolveActive::step( ProcPtr info )
+void update_info(double* time, int func, int elapsed, int count, double dt)
 {
+	time[func] += elapsed / 1000.0f;
+	char * str;
+	if(count >= (0.2/dt) - 1)
+	{
+		switch(func)
+		{
+			case 0: str = "advanceChannels";break;
+			case 1: str = "calculateChannelCurrents";break;
+			case 2: str = "updateMatrix";break;
+			case 3: str = "forwardEliminate";break;
+			case 4: str = "backwardSubstitute";break;
+			case 5: str = "advanceCalcium";break;
+			case 6: str = "advanceSynChans";break;
+			case 7: str = "sendValues";break;
+			case 8: str = "sendSpikes";break;
+			case 9: str = "externalCurrent_.assign";break;
+			default: str = "Unkown";break;
+		}
+		printf("Function %s takes %fs.\n", str, time[func]/ 1000.0f);
+	}
+}
+void HSolveActive::step( ProcPtr info )
+{	
     if ( nCompt_ <= 0 )
         return;
 
@@ -82,19 +110,70 @@ void HSolveActive::step( ProcPtr info )
     {
         current_.resize( channel_.size() );
     }
-
+    
+    total_count ++;
+    
+	  u64 start_time, end_time;
+    start_time = getTime();
+    
     advanceChannels( info->dt );
+    
+    end_time = getTime();
+    update_info(total_time, 0, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;
+    
     calculateChannelCurrents();
+    
+    end_time = getTime();
+    update_info(total_time, 1, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+    
     updateMatrix();
+    end_time = getTime();
+    update_info(total_time, 2, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+        
     HSolvePassive::forwardEliminate();
+    
+    end_time = getTime();
+    update_info(total_time, 3, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+        
     HSolvePassive::backwardSubstitute();
+    
+    end_time = getTime();
+    update_info(total_time, 4, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+        
     advanceCalcium();
+    
+    end_time = getTime();
+    update_info(total_time, 5, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+        
     advanceSynChans( info );
-
+    
+    end_time = getTime();
+    update_info(total_time, 6, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+    
     sendValues( info );
+    
+    end_time = getTime();
+    update_info(total_time, 7, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+        
     sendSpikes( info );
+     
+    end_time = getTime();
+    update_info(total_time, 8, end_time - start_time, total_count ,info->dt);
+    start_time = end_time;   
+       
 
     externalCurrent_.assign( externalCurrent_.size(), 0.0 );
+    
+    end_time = getTime();
+    update_info(total_time, 9, end_time - start_time, total_count ,info->dt);
 }
 
 void HSolveActive::calculateChannelCurrents()
@@ -248,9 +327,7 @@ void HSolveActive::advanceCalcium()
 
 void HSolveActive::advanceChannels( double dt )
 {
-    u64 start_time, end_time;
-    start_time = getTime();
-    
+
     vector< double >::iterator iv;
     vector< double >::iterator istate = state_.begin();
     vector< int >::iterator ichannelcount = channelCount_.begin();
@@ -469,9 +546,7 @@ void HSolveActive::advanceChannels( double dt )
         ++ichannelcount, ++icacount;
     }
 #endif
-    end_time = getTime();
-    
-    //printf("GPU AdvanceChannel takes %fms.\n", (end_time - start_time) / 1000.0);       
+      
 }
 LookupColumn * HSolveActive::get_column_d()
 {
