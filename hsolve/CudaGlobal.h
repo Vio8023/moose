@@ -26,7 +26,13 @@
 
 typedef unsigned int u32;
 typedef unsigned long long u64;
-typedef u64 ChannelData;
+typedef struct ChannelInfo_{
+  u64 data;
+  double modulation;
+  double Gbar;
+} ChannelInfo;
+//typedef u64 ChannelData;
+typedef ChannelInfo ChannelData;
 
 const u32 STATE_BITS = 22,
           COMPARTMENT_BITS = 18,

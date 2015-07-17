@@ -140,7 +140,8 @@ protected:
     int                       current_ca_position;
     vector<ChannelData>		  channel_data_;
     ChannelData 			  * channel_data_d;
-    void copy_to_device(double ** v_row_array, double * v_row_temp, int size);
+    void copy_to_device(double ** v_row_array, double * v_row_temp, int row_size);
+    void copy_current(CurrentStruct ** current_d, CurrentStruct * current_h, int current_size) ;   
     LookupColumn			  *column_d;
     int                       is_inited_;
 	void copy_data(std::vector<LookupColumn>& column,
@@ -199,6 +200,8 @@ private:
     LookupTable&                     caTable,                       
     double                          * istate,
     ChannelData                     * channel,
+    CurrentStruct                   * current,
+    vector<CurrentStruct>&          current_h,
     double                          dt,
     int                             set_size,
     int                             channel_size,

@@ -17,10 +17,16 @@
 
 __device__ __constant__ int instant_xyz_d[3];
 
-void HSolveActive::copy_to_device(double ** v_row_array, double * v_row_temp, int size)
+void HSolveActive::copy_to_device(double ** v_row_array, double * v_row_temp, int row_size)
 {
-	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(double) * size));
-	cudaSafeCall(cudaMemcpy(*v_row_array, v_row_temp, sizeof(double) * size, cudaMemcpyHostToDevice));
+	cudaSafeCall(cudaMalloc((void**)v_row_array, sizeof(double) * row_size));
+	cudaSafeCall(cudaMemcpy(*v_row_array, v_row_temp, sizeof(double) * row_size, cudaMemcpyHostToDevice));
+}
+void HSolveActive::copy_current(CurrentStruct ** current_d, CurrentStruct * current_h, int current_size)
+{
+
+	cudaSafeCall(cudaMalloc((void**)current_d, sizeof(double) * current_size));
+	cudaSafeCall(cudaMemcpy(*current_d, current_h, sizeof(CurrentStruct) * current_size, cudaMemcpyHostToDevice));	
 }
 
 
@@ -43,6 +49,7 @@ void advanceChannel_kernel(
 	ChannelData 					* channel,
 	double                           * ca_row_array,
 	double                          * istate,
+	CurrentStruct					* current,
 	const unsigned                  channel_size,
 	double                          dt,
 	const unsigned					num_of_compartment
@@ -51,30 +58,14 @@ void advanceChannel_kernel(
 	int tID = threadIdx.x + blockIdx.x * blockDim.x;
 	int id = tID;
 	if ((tID)>= channel_size) return;
-	u64 data = channel[tID];
-	if(get_compartment_index(data) >= num_of_compartment)
-	{
-		printf("id %d ch %d compartment index %d >= number of compartment %d.\n", 
-			id, tID,
-			get_compartment_index(data), num_of_compartment);
 
-	}	
-	if(get_compartment_index(data) >= num_of_compartment){
-		printf("tID: %d is doing the following printing.\n", tID);
-	}	
-	
-	if(get_compartment_index(data) >= num_of_compartment)
-	{
-		char b[65];
-		print_binary(b, data);
-		printf("data: %s\n", b);
-	}	
+	ChannelData d = channel[tID];
+
+	double fraction = d.modulation;
+
+	u64 data = d.data;	
 	tID = get_state_index(data);
-	if(get_compartment_index(data) >= num_of_compartment){
-		printf("state index: %d\n", tID);
-		printf("compartment index: %d\n", get_compartment_index(data));
-		printf("Instant: %d\n", get_instant(data));
-	}	
+	
 	double myrow = v_row_array[get_compartment_index(data)];
 	// if(id == 0){
 	// 	printf("myrow: %f\n", myrow);
@@ -159,9 +150,23 @@ void advanceChannel_kernel(
 			// if(id == 0){
 			// 	printf("branch state: %f\n", istate[tID + i]);
 			// }				
-		} 
+		}
+
+		if(i == 0)
+		{
+			fraction *= istate[tID];
+		} else if(i == 1)
+		{
+			fraction *= istate[tID] * istate[tID];
+		} else if(i == 2)
+		{
+			fraction *= istate[tID] * istate[tID] * istate[tID] * istate[tID];
+		}
+
+
 		tID ++;
 	} 
+	current[id].Gk = d.Gbar * fraction;
 }
 
 void HSolveActive::copy_data(std::vector<LookupColumn>& column,
@@ -201,6 +206,8 @@ void HSolveActive::advanceChannel_gpu(
 	LookupTable&                     caTable,                       
 	double                          * istate,
 	ChannelData 					* channel,
+	CurrentStruct					* current,
+	vector<CurrentStruct>&			current_h,
 	double                          dt,
 	int 							set_size,
 	int 							channel_size,
@@ -262,6 +269,7 @@ void HSolveActive::advanceChannel_gpu(
 		channel,
 		caRow_array_d,
 		istate_d,
+		current,
 		channel_size,
 		dt,
 		num_of_compartment
@@ -270,11 +278,13 @@ void HSolveActive::advanceChannel_gpu(
 	cudaCheckError(); 
 
 	cudaSafeCall(cudaMemcpy(istate, istate_d, set_size * sizeof(double), cudaMemcpyDeviceToHost));
+	cudaSafeCall(cudaMemcpy(&current_h.front(), current, set_size * sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
 
 	cudaSafeCall(cudaDeviceSynchronize());    
  
  	cudaSafeCall(cudaFree(v_row_d));
 	cudaSafeCall(cudaFree(caRow_array_d));
 	cudaSafeCall(cudaFree(istate_d));
+	cudaSafeCall(cudaFree(current));
 }
 #endif

@@ -122,7 +122,7 @@ void HSolveActive::step( ProcPtr info )
     update_info(total_time, 0, end_time - start_time, total_count ,info->dt);
     start_time = end_time;
     
-    calculateChannelCurrents();
+    //gmcalculateChannelCurrents();
     
     end_time = getTime();
     update_info(total_time, 1, end_time - start_time, total_count ,info->dt);
@@ -353,6 +353,7 @@ void HSolveActive::advanceChannels( double dt )
     iv = V_.begin();
 
     double * v_row_array_d;
+    CurrentStruct * current_d;
 
     if(V_.size() < 1024 && 0)
     {
@@ -370,18 +371,6 @@ void HSolveActive::advanceChannels( double dt )
     } else {
         vTable_.row_gpu(iv, &v_row_array_d, V_.size());
     }
-#if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
-    printf("Trying to access v_row_array_d...\n");
-    
-    std::vector<double> h_row(V_.size());
-    cudaSafeCall(cudaMemcpy(&h_row.front(), v_row_array_d, sizeof(double) * V_.size(), cudaMemcpyDeviceToHost));
-    printf("row 0 is %f.\n", h_row[0]);
-    printf("last row is %f.\n", h_row[V_.size() - 1]);
-#ifdef DEBUG_STEP
-    getchar();
-#endif    
-#endif  
-
 
 #if defined(DEBUG_) && defined(DEBUG_VERBOSE) 
     printf("Starting converting caRow_ to caRow_ac...\n");
@@ -411,7 +400,7 @@ void HSolveActive::advanceChannels( double dt )
 #endif    
 #endif
 
-    for (int i = 0; i < V_.size(); ++i) {
+    for (unsigned int i = 0; i < V_.size(); ++i) {
         icarowcompt = caRowCompt_.begin();
         caBoundary = ica + *icacount;
         
@@ -430,7 +419,8 @@ void HSolveActive::advanceChannels( double dt )
 #ifdef DEBUG_STEP
     getchar();
 #endif    
-#endif    
+#endif  
+    copy_current(&current_d, &current_.front(), current_.size());  
     copy_data(column_,
     		  &column_d,
     		  &is_inited_,
@@ -447,6 +437,8 @@ void HSolveActive::advanceChannels( double dt )
                        caTable_, 
                        &state_.front(), 
                        channel_data_d,
+                       current_d,
+                       current_,
                        dt,
                        (int)(column_.size()),
                        (int)(channel_data_.size()),

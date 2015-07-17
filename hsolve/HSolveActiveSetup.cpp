@@ -31,13 +31,13 @@ void HSolveActive::setup( Id seed, double dt )
     //~ reinit();
     cleanup();
 
-    //~ cout << "# of compartments: " << compartmentId_.size() << "." << endl;
-    //~ cout << "# of channels: " << channelId_.size() << "." << endl;
-    //~ cout << "# of gates: " << gateId_.size() << "." << endl;
-    //~ cout << "# of states: " << state_.size() << "." << endl;
-    //~ cout << "# of Ca pools: " << caConc_.size() << "." << endl;
-    //~ cout << "# of SynChans: " << synchan_.size() << "." << endl;
-    //~ cout << "# of SpikeGens: " << spikegen_.size() << "." << endl;
+     cout << "# of compartments: " << compartmentId_.size() << "." << endl;
+     cout << "# of channels: " << channelId_.size() << "." << endl;
+     cout << "# of gates: " << gateId_.size() << "." << endl;
+     cout << "# of states: " << state_.size() << "." << endl;
+     cout << "# of Ca pools: " << caConc_.size() << "." << endl;
+     cout << "# of SynChans: " << synchan_.size() << "." << endl;
+     cout << "# of SpikeGens: " << spikegen_.size() << "." << endl;
 }
 
 void HSolveActive::reinit( ProcPtr info )
@@ -194,31 +194,35 @@ void HSolveActive::readHHChannels()
             channel.modulation_ = modulation;
 #ifdef USE_CUDA
             char b[65];
-            ChannelData c = 0ull;
-            Xpower > 0?pack_x(c, 1):pack_x(c, 0);
-            Ypower > 0?pack_y(c, 1):pack_y(c, 0);
-            Zpower > 0?pack_z(c, 1):pack_z(c, 0);
+            ChannelData c;
+            c.data = 0ull;
+            c.modulation = modulation;
+            c.Gbar = Gbar;
+
+            Xpower > 0?pack_x(c.data, 1):pack_x(c.data, 0);
+            Ypower > 0?pack_y(c.data, 1):pack_y(c.data, 0);
+            Zpower > 0?pack_z(c.data, 1):pack_z(c.data, 0);
             // if(channel_data_.size() == 15084)
             // {
             //     printf("x,y,z power: %d %d %d.\n", Xpower, Ypower, Zpower);
             //     print_binary(b, c);
             //     printf("data: %s.\n", b);
             // }            
-            pack_instant(c, instant);
+            pack_instant(c.data, instant);
             // if(channel_data_.size() == 15084)
             // {
             //     printf("instant: %d.\n", instant);
             //     print_binary(b, c);
             //     printf("data: %s.\n", b);
             // }               
-            pack_compartment_index(c, icompt - compartmentId_.begin());
+            pack_compartment_index(c.data, icompt - compartmentId_.begin());
             // if(channel_data_.size() == 15084)
             // {
             //     printf("compartment: %d.\n", icompt - compartmentId_.begin());
             //     print_binary(b, c);
             //     printf("data: %s.\n", b);
             // }              
-            pack_state_index(c, nState);            
+            pack_state_index(c.data, nState);            
             // if(channel_data_.size() == 15084)
             // {
             //     printf("state: %d.\n", nState);
@@ -252,7 +256,7 @@ void HSolveActive::readHHChannels()
             {
                 state_.push_back( Z );
 #ifdef USE_CUDA          
-                pack_ca_row_index(c, current_ca_position);
+                pack_ca_row_index(c.data, current_ca_position);
                 nState ++;         
                 current_ca_position++;
 #endif                   
