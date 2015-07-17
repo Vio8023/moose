@@ -25,7 +25,7 @@ void HSolveActive::copy_to_device(double ** v_row_array, double * v_row_temp, in
 void HSolveActive::copy_current(CurrentStruct ** current_d, CurrentStruct * current_h, int current_size)
 {
 
-	cudaSafeCall(cudaMalloc((void**)current_d, sizeof(double) * current_size));
+	cudaSafeCall(cudaMalloc((void**)current_d, sizeof(CurrentStruct) * current_size));
 	cudaSafeCall(cudaMemcpy(*current_d, current_h, sizeof(CurrentStruct) * current_size, cudaMemcpyHostToDevice));	
 }
 
@@ -278,7 +278,7 @@ void HSolveActive::advanceChannel_gpu(
 	cudaCheckError(); 
 
 	cudaSafeCall(cudaMemcpy(istate, istate_d, set_size * sizeof(double), cudaMemcpyDeviceToHost));
-	cudaSafeCall(cudaMemcpy(&current_h.front(), current, set_size * sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
+	cudaSafeCall(cudaMemcpy(&current_h.front(), current, channel_size * sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
 
 	cudaSafeCall(cudaDeviceSynchronize());    
  
