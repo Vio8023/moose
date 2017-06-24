@@ -22,6 +22,7 @@
 #include "CudaGlobal.h"
 #include "RateLookup.h"
 
+//#define TEST_CORRECTNESS
 
 #ifdef USE_CUDA
 #include "Gpu_timer.h"
@@ -95,6 +96,10 @@ HSolveActive::HSolveActive()
 
 void HSolveActive::step( ProcPtr info )
 {	
+
+	if(step_num == 0)
+		cout << "SIMULATION STARTED" << endl;
+
     if ( nCompt_ <= 0 )
         return;
 
@@ -103,14 +108,36 @@ void HSolveActive::step( ProcPtr info )
         current_.resize( channel_.size() );
     }
     step_num++;
+#ifdef USE_CUDA
+    //step_num++;
+#endif
+    u64 start, end;
+    double advanceChannelsTime;
+    double calcChanCurTime;
+    double updateMatTime;
+    double solverTime;
+    double advCalcTime;
+    double advSynchanTime;
+    double sendValuesTime;
+    double sendSpikesTime;
+    double memoryTransferTime;
 
 #ifdef USE_CUDA
    	advanceChannels( info->dt );
    	calculateChannelCurrents();
 
+   	/*
+	if(step_num == 1) remove("current.csv");
+	// Dealing with current
+	ofstream currentFile("current.csv",ios::app);
+	currentFile << inject_[3580].injectBasal << endl;
+	*/
 	updateMatrix();
-	HSolvePassive::forwardEliminate();
-	HSolvePassive::backwardSubstitute();
+
+	//HSolvePassive::forwardEliminate();
+	//HSolvePassive::backwardSubstitute();
+
+	pervasiveFlowSolverOpt();
 
 	cudaSafeCall(cudaMemcpy(d_Vmid, &(VMid_[0]), nCompt_*sizeof(double), cudaMemcpyHostToDevice));
 	calculate_V_from_Vmid_wrapper(); // Avoing Vm memory transfer and using CUDA kernel
@@ -124,7 +151,15 @@ void HSolveActive::step( ProcPtr info )
 #else
 	advanceChannels( info->dt );
 	calculateChannelCurrents();
-	int solver_choice = 0; // 0-Moose , 1-Forward-flow, 2-Pervasive-flow
+	int solver_choice = 2; // 0-Moose , 1-Forward-flow, 2-Pervasive-flow
+
+	/*
+	string pPath = getenv("SOLVER_CHOICE");
+	if(pPath.size() != 0){
+		stringstream convert(pPath);
+		convert >> solver_choice;
+	}
+	*/
 
 	switch(solver_choice){
 		case 0:
@@ -161,11 +196,21 @@ void HSolveActive::step( ProcPtr info )
 void HSolveActive::calculateChannelCurrents()
 {
 #ifdef USE_CUDA
+	/*
+	// TEMPORARY CODE
+	GpuTimer timer;
+	timer.Start();
+		calculate_channel_currents_cuda_wrapper();
+	timer.Stop();
+	float time = timer.Elapsed();
+	if(step_num < 20)
+		cout << time << endl;
+	*/
 
 	calculate_channel_currents_cuda_wrapper();
 	//cudaSafeCall(cudaMemcpy(&current_[0], d_current_, current_.size()*sizeof(CurrentStruct), cudaMemcpyDeviceToHost));
-
 #else
+	u64 startTime = getTime();
     vector< ChannelStruct >::iterator ichan;
     vector< CurrentStruct >::iterator icurrent = current_.begin();
 
@@ -179,6 +224,10 @@ void HSolveActive::calculateChannelCurrents()
             ++icurrent;
         }
     }
+    u64 endTime = getTime();
+
+    //if(step_num < 10)
+    //		cout << ((endTime-startTime)/1000.0f)/time << " Calculate chan currents time " << time << " " << (endTime-startTime)/1000.0f << endl;
 #endif
 }
 
@@ -186,21 +235,22 @@ void HSolveActive::updateMatrix()
 {
 
 #ifdef USE_CUDA
-
+	/*
 	// Updates HS matrix and sends it to CPU
 	if ( HJ_.size() != 0 )
 		memcpy( &HJ_[ 0 ], &HJCopy_[ 0 ], sizeof( double ) * HJ_.size() );
 	update_matrix_cuda_wrapper();
-
+	*/
 
 	// Copying initial matrix
-	//memcpy(qfull_mat.values, perv_mat_values_copy, qfull_mat.nnz*sizeof(double));
-	//update_perv_matrix_cuda_wrapper();
+	memcpy(qfull_mat.values, perv_mat_values_copy, qfull_mat.nnz*sizeof(double));
+	update_perv_matrix_cuda_wrapper();
 
 	// Updates CSR matrix and sends it to CPU.
 	//update_csrmatrix_cuda_wrapper();
 
 #else
+	u64 startTime = getTime();
 	// CPU PART
 	/*
 	 * Copy contents of HJCopy_ into HJ_. Cannot do a vector assign() because
@@ -269,6 +319,8 @@ void HSolveActive::updateMatrix()
 
         ihs += 4;
     }
+    u64 endTime = getTime();
+
 #endif
     stage_ = 0;    // Update done.
 }
@@ -404,7 +456,7 @@ void HSolveActive::pervasiveFlowSolverOpt(){
 	//// Optimized pervasive flow solver
 	//bool is_lower_triang;
 	int elim_index = 0;
-	for (unsigned int i = 0; i < nCompt_; ++i) {
+	for (int i = 0; i < nCompt_; ++i) {
 		for (int j = qfull_mat.rowPtr[i]; j < upper_triang_offsets[i]; ++j) {
 			// Eliminating an element
 			int r1 = qfull_mat.colIndex[j];
@@ -447,7 +499,18 @@ void HSolveActive::pervasiveFlowSolverOpt(){
 void HSolveActive::advanceCalcium()
 {
 #ifdef USE_CUDA
+	/* TEMPORARY CODE FOR Timings
+	GpuTimer timer;
+	timer.Start();
+		advance_calcium_cuda_wrapper();
+	timer.Stop();
+	float time = timer.Elapsed();
+	if(step_num < 10)	cout << "Advance calcium " << time << endl;
+	*/
+
 	advance_calcium_cuda_wrapper();
+
+//#endif
 #else
 
     vector< double* >::iterator icatarget = caTarget_.begin();
@@ -519,26 +582,44 @@ void HSolveActive::advanceChannels( double dt )
 {
 
 #ifdef USE_CUDA
+
+    // Useful variables
+    int num_comps = V_.size();
+
 	if(!is_initialized){
+		// TODO Move it to appropriate place
+
 		// Initializing device Vm and Ca pools
 		cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
 		cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
 		cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
 
+		/*
+		// Setting up cusparse information. If SPMV approach is used then
+		cusparseSafeCall(cusparseCreate(&cusparse_handle));
+
+		// create and setup matrix descriptor
+		cusparseSafeCall(cusparseCreateMatDescr(&cusparse_descr));
+		cusparseSafeCall(cusparseSetMatType(cusparse_descr, CUSPARSE_MATRIX_TYPE_GENERAL));
+		cusparseSafeCall(cusparseSetMatIndexBase(cusparse_descr, CUSPARSE_INDEX_BASE_ZERO));
+		*/
+
 		is_initialized = true;
 	}
 
-	// Transferring memory to device
-	cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(d_state_, &(state_[0]), state_.size()*sizeof(double), cudaMemcpyHostToDevice));
-	cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
-
 	// Calling the kernels
+	//cudaSafeCall(cudaMemcpy(d_V, &(V_.front()), nCompt_ * sizeof(double), cudaMemcpyHostToDevice));
+	//cudaSafeCall(cudaMemcpy(d_ca, &(ca_.front()), ca_.size()*sizeof(double), cudaMemcpyHostToDevice));
+
 	get_lookup_rows_and_fractions_cuda_wrapper(dt); // Gets lookup values for Vm and Ca_.
 	advance_channels_cuda_wrapper(dt); // Advancing fraction values.
 
-	// Transferring memory to host
-	cudaSafeCall(cudaMemcpy(&state_[0], d_state_, state_.size()*sizeof(double), cudaMemcpyDeviceToHost));
+	//cudaSafeCall(cudaMemcpy(&state_[0], d_state_, state_.size()*sizeof(double), cudaMemcpyDeviceToHost));
+
+	if(step_num == 1){
+		cout << channel_.size() << " " << channel_.size()*3 << " " << state_.size() << " extra % " << (state_.size()*100.0f)/(channel_.size()*3) << endl;
+	}
+
 #else
 
     vector< double >::iterator iv;
@@ -669,7 +750,7 @@ void HSolveActive::allocate_cpu_memory(){
 	num_stim_comp = 0;
 
 	// Initializing elements in map to -1
-	for (unsigned int i = 0; i < nCompt_; ++i) {
+	for (int i = 0; i < nCompt_; ++i) {
 		stim_map[i] = -1;
 	}
 
@@ -983,32 +1064,32 @@ void HSolveActive::copy_hsolve_information_cuda(){
 
 	// caConc_ Array of structures to structure of arrays.
 	double* temp_caconc = new double[caConc_.size()]();
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].c_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_c_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
 
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].CaBasal_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_CaBasal_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
 
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].factor1_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_factor1_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
 
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].factor2_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_factor2_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
 
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].ceiling_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_ceiling_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
 
-	for (unsigned int i = 0; i < caConc_.size(); ++i) {
+	for (int i = 0; i < caConc_.size(); ++i) {
 		temp_caconc[i] = caConc_[i].floor_;
 		cudaSafeCall(cudaMemcpy(d_CaConcStruct_floor_, temp_caconc, caConc_.size()*sizeof(double), cudaMemcpyHostToDevice));
 	}
